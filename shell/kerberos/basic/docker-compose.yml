@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  kerberos-server:
+    image: kerberos-server:v1.0
+    container_name: kerberos-server
+    hostname: mykdc
+    ports:
+      - "88:88"
+      - "749:749"
+    environment:
+      - KRB5_KDC_PROFILE=/var/kerberos/krb5kdc/kdc.conf
