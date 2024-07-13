@@ -8,5 +8,8 @@ services:
     ports:
       - "88:88"
       - "749:749"
+    volumes: 
+      - ./script/init_k_user.sh:/root/help/init_k_user.sh
     environment:
+      - TZ=Asia/Shanghai
       - KRB5_KDC_PROFILE=/var/kerberos/krb5kdc/kdc.conf

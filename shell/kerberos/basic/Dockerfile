@@ -10,6 +10,9 @@ RUN sed -e 's|^mirrorlist=|#mirrorlist=|g' \
         -i.bak \
         /etc/yum.repos.d/CentOS-*
 
+# 时区
+RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
 # 更新包列表并安装 Kerberos 相关软件包
 RUN yum -y update && \
     yum -y install krb5-server krb5-libs krb5-workstation && \
