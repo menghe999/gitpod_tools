@@ -1,10 +1,15 @@
-version: '3.8'
+# version: '3.8'
 
 services:
   kerberos-server:
     image: kerberos-server:v1.0
     container_name: kerberos-server
     hostname: mykdc
+    networks:
+      mynet:
+        ipv4_address: 172.20.0.101
+    extra_hosts: 
+      - "mynode:172.20.0.102"
     ports:
       - "88:88"
       - "749:749"
@@ -13,3 +18,21 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - KRB5_KDC_PROFILE=/var/kerberos/krb5kdc/kdc.conf
+
+  kerberos-client:
+    image: mycentos:v1.0
+    container_name: kerberos-client
+    hostname: mynode
+    networks:
+      mynet:
+        ipv4_address: 172.20.0.102
+    extra_hosts: 
+      - "mykdc:172.20.0.101"
+    environment:
+      - TZ=Asia/Shanghai
+
+networks:
+  mynet:
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
