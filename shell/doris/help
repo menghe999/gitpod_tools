@@ -1,3 +1,10 @@
+cd ./docker-build/fe/resource
+wget https://apache-doris-releases.oss-accelerate.aliyuncs.com/apache-doris-2.1.5-bin-x64.tar.gz
+
+cd ./docker-build/be/resource
+wget https://apache-doris-releases.oss-accelerate.aliyuncs.com/apache-doris-2.1.5-bin-x64.tar.gz
+
+
 cd ./docker-build/fe
 docker build . -t apache-doris:2.1.5-fe
 
