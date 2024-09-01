@@ -1,8 +1,11 @@
 # prepare
+cd /workspace/gitpod_tools/shell/flink
 wget https://archive.apache.org/dist/flink/flink-1.18.1/flink-1.18.1-bin-scala_2.12.tgz
 tar -zxvf flink-1.18.1-bin-scala_2.12.tgz
 
+cd /workspace/gitpod_tools/shell/flink/lib
+wget https://fs-im-kefu.7moor-fs1.com/ly/4d2c3f00-7d4c-11e5-af15-41bf63ae4ea0/1725198253934/flink-udf-1.0-SNAPSHOT.jar
 # run flink demo
-cd flink-1.18.1
+cd /workspace/gitpod_tools/shell/flink
 ./bin/start-cluster.sh
 ./bin/sql-client.sh -f ../job.sql 
