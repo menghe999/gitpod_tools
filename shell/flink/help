@@ -1,0 +1,8 @@
+# prepare
+wget https://archive.apache.org/dist/flink/flink-1.18.1/flink-1.18.1-bin-scala_2.12.tgz
+tar -zxvf flink-1.18.1-bin-scala_2.12.tgz
+
+# run flink demo
+cd flink-1.18.1
+./bin/start-cluster.sh
+./bin/sql-client.sh -f ../job.sql 
