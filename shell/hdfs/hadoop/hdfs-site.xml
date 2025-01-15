@@ -1,0 +1,87 @@
+<configuration>
+  <!-- NameNode 配置 -->
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>/hadoop/dfs/name</value>
+  </property>
+  <property>
+    <name>dfs.namenode.kerberos.principal</name>
+    <value>nn/namenode.emr.1234.com@EMR.1234.COM</value>
+  </property>
+  <property>
+    <name>dfs.namenode.keytab.file</name>
+    <value>/etc/hadoop/nn.keytab</value>
+  </property>
+
+  <!-- DataNode 配置 -->
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>file:///hadoop/dfs/data</value>
+  </property>
+  <property>
+    <name>dfs.datanode.kerberos.principal</name>
+    <value>dn/datanode.emr.1234.com@EMR.1234.COM</value>
+  </property>
+  <property>
+    <name>dfs.datanode.keytab.file</name>
+    <value>/etc/hadoop/dn.keytab</value>
+  </property>
+
+  <property>
+  <name>dfs.datanode.address</name>
+  <value>0.0.0.0:61004</value>
+</property>
+<property>
+  <name>dfs.datanode.http.address</name>
+  <value>0.0.0.0:61006</value>
+</property>
+
+<!-- <property>
+    <name>dfs.datanode.address</name>
+    <value>0.0.0.0:578</value>
+</property>
+<property>
+    <name>dfs.datanode.http.address</name>
+    <value>0.0.0.0:579</value>
+</property> -->
+
+<property>
+  <name>dfs.http.policy</name>
+  <value>HTTPS_ONLY</value>
+</property>
+
+<property>
+  <name>dfs.data.transfer.protection</name>
+  <value>integrity</value>
+</property>
+
+  <!-- Web UI 认证配置 -->
+  <property>
+    <name>dfs.web.authentication.kerberos.principal</name>
+    <value>HTTP/namenode.emr.1234.com@EMR.1234.COM</value>
+  </property>
+  <property>
+    <name>dfs.web.authentication.kerberos.keytab</name>
+    <value>/etc/hadoop/nn.keytab</value>
+  </property>
+
+  <!-- 安全配置 -->
+  <property>
+    <name>dfs.block.access.token.enable</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>dfs.permissions.enabled</name>
+    <value>true</value>
+  </property>
+
+  <!-- 其他配置 -->
+  <property>
+    <name>dfs.replication</name>
+    <value>3</value>
+  </property>
+  <property>
+    <name>dfs.namenode.datanode.registration.ip-hostname-check</name>
+    <value>false</value>
+  </property>
+</configuration>
