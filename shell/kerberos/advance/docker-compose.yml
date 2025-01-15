@@ -1,0 +1,50 @@
+version: '3'
+services:
+  kdc1:
+    build: 
+      context: .  # 将构建上下文设置为上级目录
+      dockerfile: kdc1/Dockerfile
+    container_name: kdc1
+    hostname: kdc1
+    environment:
+      REALM: EMR.1234.COM
+      DOMAIN: emr.1234.com
+      KDC_HOST: kdc1
+      MASTER_PASSWORD: master1234
+      REALM2: EMR.6789.COM
+      DOMAIN2: emr.6789.com
+      KDC_HOST2: kdc2
+    ports:
+      - "88:88"
+      - "749:749"
+    networks:
+      kerberos-net:
+        ipv4_address: 172.20.0.2
+
+  kdc2:
+    build:
+      context: .  # 将构建上下文设置为上级目录
+      dockerfile: kdc1/Dockerfile
+    container_name: kdc2
+    hostname: kdc2
+    environment:
+      REALM: EMR.6789.COM
+      DOMAIN: emr.6789.com
+      KDC_HOST: kdc2
+      MASTER_PASSWORD: master6789
+      REALM2: EMR.1234.COM
+      DOMAIN2: emr.1234.com
+      KDC_HOST2: kdc1
+    ports:
+      - "89:88"
+      - "750:749"
+    networks:
+      kerberos-net:
+        ipv4_address: 172.20.0.3
+
+networks:
+  kerberos-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
