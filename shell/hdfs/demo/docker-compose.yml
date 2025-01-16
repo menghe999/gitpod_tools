@@ -1,9 +1,15 @@
 services:
   hdfs-file-sync:
-    image: hdfs-file-sync:1.2
+    image: hdfs-file-sync:1.3
     container_name: hdfs-file-sync
-    # environment:
-    #   - JAVA_OPTS=-Djava.security.krb5.conf=/etc/krb5.conf
+    environment:
+      - SOURCE_CONF_DIR=/app/hadoop
+      - TARGET_CONF_DIR=/app/hadoop1
+      - SOURCE_PATH=/user/test
+      - TARGET_PATH=/user/test1
+      - KEYTAB_PATH=/app/test.keytab
+      - PRINCIPAL=test@EMR.1234.COM
+      - KRB5_PATH=/etc/krb5.conf
     volumes:
       # 挂载本地文件到容器中
       - ./krb5.conf:/etc/krb5.conf
