@@ -66,42 +66,60 @@ services:
     depends_on:
       - namenode
 
-  # resourcemanager:
-  #   image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
-  #   container_name: resourcemanager
-  #   hostname: resourcemanager.emr.1234.com
-  #   environment:
-  #     - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
-  #     - KRB5_REALM=EMR.1234.COM
-  #     - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
-  #   ports:
-  #     - "8088:8088"  # ResourceManager Web UI
-  #   volumes:
-  #     - ./kerberos/rm.keytab:/etc/hadoop/rm.keytab  # 挂载 ResourceManager 的 Keytab 文件
-  #     - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml  # 挂载 Hadoop 配置文件
-  #     - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
-  #   networks:
-  #     - hadoop-net
-  #   depends_on:
-  #     - namenode
-  #     - datanode
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: resourcemanager
+    hostname: resourcemanager.emr.1234.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
+      - KRB5_REALM=EMR.1234.COM
+      - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
+    ports:
+      - "8088:8088"  # ResourceManager Web UI
+    volumes:
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/nn.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
+      - ./kerberos/rm.keytab:/etc/hadoop/rm.keytab  # 挂载 ResourceManager 的 Keytab 文件
+      - ./kerberos/nm.keytab:/etc/hadoop/nm.keytab
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml  # 挂载 Hadoop 配置文件
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hadoop/yarn-site.xml:/etc/hadoop/yarn-site.xml
+      - ./hadoop/ssl-server.xml:/etc/hadoop/ssl-server.xml
+      - ./hadoop/ssl-client.xml:/etc/hadoop/ssl-client.xml
+      - ./ca/bash/truststore:/etc/hadoop/truststore
+      - ./ca/bash/keystore:/etc/hadoop/keystore
+    networks:
+      - hadoop-net
+    depends_on:
+      - namenode
+      - datanode
 
-  # nodemanager:
-  #   image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
-  #   container_name: nodemanager
-  #   hostname: nodemanager.emr.1234.com
-  #   environment:
-  #     - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
-  #     - KRB5_REALM=EMR.1234.COM
-  #     - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
-  #   volumes:
-  #     - ./kerberos/nm.keytab:/etc/hadoop/nm.keytab  # 挂载 NodeManager 的 Keytab 文件
-  #     - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml  # 挂载 Hadoop 配置文件
-  #     - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
-  #   networks:
-  #     - hadoop-net
-  #   depends_on:
-  #     - resourcemanager
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager
+    hostname: nodemanager.emr.1234.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
+      - KRB5_REALM=EMR.1234.COM
+      - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
+    volumes:
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/nn.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
+      - ./kerberos/nm.keytab:/etc/hadoop/nm.keytab  # 挂载 NodeManager 的 Keytab 文件
+      - ./kerberos/rm.keytab:/etc/hadoop/rm.keytab
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml  # 挂载 Hadoop 配置文件
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hadoop/yarn-site.xml:/etc/hadoop/yarn-site.xml
+      - ./hadoop/ssl-server.xml:/etc/hadoop/ssl-server.xml
+      - ./hadoop/ssl-client.xml:/etc/hadoop/ssl-client.xml
+      - ./ca/bash/truststore:/etc/hadoop/truststore
+      - ./ca/bash/keystore:/etc/hadoop/keystore
+    networks:
+      - hadoop-net
+    depends_on:
+      - resourcemanager
 
   # historyserver:
   #   image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
@@ -117,6 +135,10 @@ services:
   #     - ./hs.keytab:/etc/hadoop/hs.keytab  # 挂载 HistoryServer 的 Keytab 文件
   #     - ./chadoop/ore-site.xml:/etc/hadoop/core-site.xml  # 挂载 Hadoop 配置文件
   #     - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+  #     - ./hadoop/ssl-server.xml:/etc/hadoop/ssl-server.xml
+  #     - ./hadoop/ssl-client.xml:/etc/hadoop/ssl-client.xml
+  #     - ./ca/bash/truststore:/etc/hadoop/truststore
+  #     - ./ca/bash/keystore:/etc/hadoop/keystore
   #   networks:
   #     - hadoop-net
   #   depends_on:
