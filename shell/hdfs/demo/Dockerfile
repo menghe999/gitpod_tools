@@ -5,7 +5,7 @@ FROM openjdk:11-jre-slim
 WORKDIR /app
 
 # 复制JAR文件、配置文件和keytab文件
-COPY hdfs-file-sync-1.3-SNAPSHOT.jar /app/hdfs-file-sync.jar
+COPY hdfs-file-sync-1.4-SNAPSHOT.jar /app/hdfs-file-sync.jar
 COPY lib.zip /app/lib.zip
 
 # 安装unzip工具（用于解压lib.zip）
