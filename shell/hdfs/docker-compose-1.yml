@@ -1,0 +1,72 @@
+version: '3.7'
+
+services:
+  namenode1:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode1
+    hostname: namenode.emr.6789.com
+    ports:
+      - "50080:50070"  # NameNode Web UI
+    environment:
+      - CLUSTER_NAME=hdfs-cluster
+      - KRB5_REALM=EMR.6789.COM
+      - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
+    volumes:
+      - ./kerberos1/krb5.conf:/etc/krb5.conf
+      - ./kerberos1/nn.keytab:/etc/hadoop/nn.keytab  # 挂载 NameNode 的 Keytab 文件
+      - ./hadoop1/core-site.xml:/etc/hadoop/core-site.xml  # 挂载 Hadoop 配置文件
+      - ./hadoop1/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hadoop1/ssl-server.xml:/etc/hadoop/ssl-server.xml
+      - ./hadoop1/ssl-client.xml:/etc/hadoop/ssl-client.xml
+      - ./ca/bash/truststore:/etc/hadoop/truststore
+      - ./ca/bash/keystore:/etc/hadoop/keystore
+      - namenode-data1:/hadoop/dfs/name  # NameNode 数据卷
+    networks:
+      hadoop-net:
+        ipv4_address: 172.20.0.31
+    extra_hosts: 
+      - "kdc1:172.20.0.2"
+      - "kdc2:172.20.0.3"
+      - "namenode.emr.6789.com:172.20.0.31"
+      - "datanode.emr.6789.com:172.20.0.32"
+
+  datanode1:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode1
+    hostname: datanode.emr.6789.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.6789.com:9000
+      - KRB5_REALM=EMR.6789.COM
+      - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
+    volumes:
+      - ./kerberos1/krb5.conf:/etc/krb5.conf
+      - ./kerberos1/dn.keytab:/etc/hadoop/dn.keytab  # 挂载 DataNode 的 Keytab 文件
+      - ./hadoop1/core-site.xml:/etc/hadoop/core-site.xml  # 挂载 Hadoop 配置文件
+      - ./hadoop1/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hadoop1/ssl-server.xml:/etc/hadoop/ssl-server.xml
+      - ./hadoop1/ssl-client.xml:/etc/hadoop/ssl-client.xml
+      - ./ca/bash/truststore:/etc/hadoop/truststore
+      - ./ca/bash/keystore:/etc/hadoop/keystore
+      - datanode-data1:/hadoop/dfs/data  # DataNode 数据卷
+    tmpfs:
+      - /tmp
+    networks:
+      hadoop-net:
+        ipv4_address: 172.20.0.32
+    extra_hosts: 
+      - "kdc1:172.20.0.2"
+      - "kdc2:172.20.0.3"
+      - "namenode.emr.6789.com:172.20.0.31"
+      - "datanode.emr.6789.com:172.20.0.32"
+    depends_on:
+      - namenode1
+
+volumes:
+  namenode-data1:
+  datanode-data1:
+
+networks:
+  hadoop-net:
+    external: true  # 声明使用外部网络
+    name: advance_kerberos-net  # 自定义网络名称
+    driver: bridge        # 网络驱动类型（bridge 是默认值）

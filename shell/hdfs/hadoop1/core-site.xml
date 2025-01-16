@@ -2,7 +2,7 @@
   <!-- 通用配置 -->
   <property>
     <name>fs.defaultFS</name>
-    <value>hdfs://namenode.emr.1234.com:9000</value>
+    <value>hdfs://namenode.emr.6789.com:9000</value>
   </property>
 
   <!-- Kerberos 认证配置 -->
@@ -25,6 +25,7 @@
     DEFAULT             
     </value>
   </property>
+
 
   <!-- 其他配置 -->
   <property>
