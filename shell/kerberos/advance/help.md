@@ -28,12 +28,14 @@ kadmin.local -q "xst -k /root/nn.keytab nn/namenode.emr.1234.com HTTP/namenode.e
 kadmin.local -q "xst -k /root/dn.keytab dn/datanode.emr.1234.com HTTP/datanode.emr.1234.com"
 kadmin.local -q "xst -k /root/rm.keytab rm/resourcemanager.emr.1234.com"
 kadmin.local -q "xst -k /root/nm.keytab nm/nodemanager.emr.1234.com"
+kadmin.local -q "xst -k /root/test.keytab test"
 
 
 chmod 400 /root/nn.keytab
 chmod 400 /root/dn.keytab
 chmod 400 /root/rm.keytab
 chmod 400 /root/nm.keytab
+chmod 400 /root/test.keytab
 
 > 本地用户test
 kadmin.local -q  "addprinc -pw 123456 test"
@@ -44,6 +46,7 @@ docker cp kdc1:/root/dn.keytab dn.keytab
 docker cp kdc1:/root/rm.keytab rm.keytab
 docker cp kdc1:/root/nm.keytab nm.keytab
 docker cp kdc1:/etc/krb5.conf krb5.conf
+docker cp kdc1:/root/test.keytab test.keytab
 
 --- 
 > kdc2上执行

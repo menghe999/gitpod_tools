@@ -1,0 +1,48 @@
+<configuration>
+  <!-- 通用配置 -->
+    <property>
+    <name>fs.hdfs.impl</name>
+    <value>org.apache.hadoop.hdfs.DistributedFileSystem</value>
+  </property>
+  
+  <property>
+    <name>fs.defaultFS</name>
+    <value>hdfs://namenode.emr.6789.com:9000</value>
+  </property>
+
+  <!-- Kerberos 认证配置 -->
+  <property>
+    <name>hadoop.security.authentication</name>
+    <value>kerberos</value>
+  </property>
+  <property>
+    <name>hadoop.security.authorization</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <name>hadoop.security.auth_to_local</name>
+    <value>
+    RULE:[1:$1@$0](^.*@EMR.1234\.COM$)s/^(.*)@EMR.1234\.COM$/$1/g
+    RULE:[2:$1@$0](^.*@EMR.1234\.COM$)s/^(.*)@EMR.1234\.COM$/$1/g
+    RULE:[1:$1@$0](^.*@EMR.6789\.COM$)s/^(.*)@EMR.6789\.COM$/$1/g
+    RULE:[2:$1@$0](^.*@EMR.6789\.COM$)s/^(.*)@EMR.6789\.COM$/$1/g 
+    DEFAULT             
+    </value>
+  </property>
+
+
+  <!-- 其他配置 -->
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>/hadoop/tmp</value>
+  </property>
+  <property>
+    <name>hadoop.proxyuser.hue.hosts</name>
+    <value>*</value>
+  </property>
+  <property>
+    <name>hadoop.proxyuser.hue.groups</name>
+    <value>*</value>
+  </property>
+</configuration>

@@ -1,0 +1,22 @@
+services:
+  hdfs-file-sync:
+    image: hdfs-file-sync:1.2
+    container_name: hdfs-file-sync
+    # environment:
+    #   - JAVA_OPTS=-Djava.security.krb5.conf=/etc/krb5.conf
+    volumes:
+      # 挂载本地文件到容器中
+      - ./krb5.conf:/etc/krb5.conf
+      - ./hadoop:/app/hadoop
+      - ./hadoop1:/app/hadoop1
+      - ./test.keytab:/app/test.keytab
+    restart: no
+    networks:
+      hadoop-net:
+        ipv4_address: 172.20.0.66
+
+networks:
+  hadoop-net:
+    external: true  # 声明使用外部网络
+    name: advance_kerberos-net  # 自定义网络名称
+    driver: bridge        # 网络驱动类型（bridge 是默认值）
