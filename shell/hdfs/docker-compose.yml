@@ -11,7 +11,11 @@ services:
       - CLUSTER_NAME=hdfs-cluster
       - KRB5_REALM=EMR.1234.COM
       - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
+      - TZ=${TZ:-Asia/Shanghai}  # 设置时区，默认为 Asia/Shanghai
     volumes:
+      - /etc/localtime:/etc/localtime:ro  # 挂载宿主机的时间文件
+      - /etc/timezone:/etc/timezone:ro    # 挂载宿主机的时区文件
+      - /dev/pts:/dev/pts                 # 挂载 /dev/pts 以确保时间同步
       - ./kerberos/krb5.conf:/etc/krb5.conf
       - ./kerberos/nn.keytab:/etc/hadoop/nn.keytab  # 挂载 NameNode 的 Keytab 文件
       - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml  # 挂载 Hadoop 配置文件
@@ -42,7 +46,11 @@ services:
       - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
       - KRB5_REALM=EMR.1234.COM
       - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
+      - TZ=${TZ:-Asia/Shanghai}  # 设置时区，默认为 Asia/Shanghai
     volumes:
+      - /etc/localtime:/etc/localtime:ro  # 挂载宿主机的时间文件
+      - /etc/timezone:/etc/timezone:ro    # 挂载宿主机的时区文件
+      - /dev/pts:/dev/pts                 # 挂载 /dev/pts 以确保时间同步
       - ./kerberos/krb5.conf:/etc/krb5.conf
       - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab  # 挂载 DataNode 的 Keytab 文件
       - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml  # 挂载 Hadoop 配置文件
@@ -74,9 +82,13 @@ services:
       - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
       - KRB5_REALM=EMR.1234.COM
       - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
+      - TZ=${TZ:-Asia/Shanghai}  # 设置时区，默认为 Asia/Shanghai
     ports:
       - "8088:8088"  # ResourceManager Web UI
     volumes:
+      - /etc/localtime:/etc/localtime:ro  # 挂载宿主机的时间文件
+      - /etc/timezone:/etc/timezone:ro    # 挂载宿主机的时区文件
+      - /dev/pts:/dev/pts                 # 挂载 /dev/pts 以确保时间同步
       - ./kerberos/krb5.conf:/etc/krb5.conf
       - ./kerberos/nn.keytab:/etc/hadoop/nn.keytab
       - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
@@ -103,7 +115,11 @@ services:
       - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
       - KRB5_REALM=EMR.1234.COM
       - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
+      - TZ=${TZ:-Asia/Shanghai}  # 设置时区，默认为 Asia/Shanghai
     volumes:
+      - /etc/localtime:/etc/localtime:ro  # 挂载宿主机的时间文件
+      - /etc/timezone:/etc/timezone:ro    # 挂载宿主机的时区文件
+      - /dev/pts:/dev/pts                 # 挂载 /dev/pts 以确保时间同步
       - ./kerberos/krb5.conf:/etc/krb5.conf
       - ./kerberos/nn.keytab:/etc/hadoop/nn.keytab
       - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
@@ -120,29 +136,6 @@ services:
       - hadoop-net
     depends_on:
       - resourcemanager
-
-  # historyserver:
-  #   image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
-  #   container_name: historyserver
-  #   hostname: historyserver.emr.1234.com
-  #   environment:
-  #     - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
-  #     - KRB5_REALM=EMR.1234.COM
-  #     - KRB5_KDC=kdc1  # 替换为您的 KDC 服务器地址
-  #   ports:
-  #     - "8188:8188"  # HistoryServer Web UI
-  #   volumes:
-  #     - ./hs.keytab:/etc/hadoop/hs.keytab  # 挂载 HistoryServer 的 Keytab 文件
-  #     - ./chadoop/ore-site.xml:/etc/hadoop/core-site.xml  # 挂载 Hadoop 配置文件
-  #     - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
-  #     - ./hadoop/ssl-server.xml:/etc/hadoop/ssl-server.xml
-  #     - ./hadoop/ssl-client.xml:/etc/hadoop/ssl-client.xml
-  #     - ./ca/bash/truststore:/etc/hadoop/truststore
-  #     - ./ca/bash/keystore:/etc/hadoop/keystore
-  #   networks:
-  #     - hadoop-net
-  #   depends_on:
-  #     - resourcemanager
 
 volumes:
   namenode-data:
