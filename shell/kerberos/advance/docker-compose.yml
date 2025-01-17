@@ -14,6 +14,11 @@ services:
       REALM2: EMR.6789.COM
       DOMAIN2: emr.6789.com
       KDC_HOST2: kdc2
+      TZ: ${TZ:-Asia/Shanghai}  # 设置时区，默认为 Asia/Shanghai
+    volumes:
+      - /etc/localtime:/etc/localtime:ro  # 挂载宿主机的时间文件
+      - /etc/timezone:/etc/timezone:ro    # 挂载宿主机的时区文件
+      - /dev/pts:/dev/pts                 # 挂载 /dev/pts 以确保时间同步
     ports:
       - "88:88"
       - "749:749"
@@ -35,6 +40,11 @@ services:
       REALM2: EMR.1234.COM
       DOMAIN2: emr.1234.com
       KDC_HOST2: kdc1
+      TZ: ${TZ:-Asia/Shanghai}  # 设置时区，默认为 Asia/Shanghai
+    volumes:
+      - /etc/localtime:/etc/localtime:ro  # 挂载宿主机的时间文件
+      - /etc/timezone:/etc/timezone:ro    # 挂载宿主机的时区文件
+      - /dev/pts:/dev/pts                 # 挂载 /dev/pts 以确保时间同步
     ports:
       - "89:88"
       - "750:749"
