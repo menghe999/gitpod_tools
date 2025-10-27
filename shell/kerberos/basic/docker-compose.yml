@@ -11,8 +11,8 @@ services:
     extra_hosts: 
       - "mynode:172.20.0.102"
     ports:
-      - "88:88"
-      - "749:749"
+      - "1088:88"
+      - "10749:749"
     volumes: 
       - ./script/init_k_user.sh:/root/help/init_k_user.sh
     environment:

@@ -1,14 +1,14 @@
 # 使用一个基础的 CentOS 镜像
-FROM centos:latest AS server
+FROM centos:7 AS server
 
 # 维护者信息
 LABEL maintainer="yourname@example.com"
 
-# 设置阿里云的 CentOS 镜像源
-RUN sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-        -e 's|^#baseurl=http://mirror.centos.org|baseurl=http://mirrors.aliyun.com|g' \
-        -i.bak \
-        /etc/yum.repos.d/CentOS-*
+
+# 更新 yum 源配置，使用 vault 仓库
+RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*.repo && \
+    sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
+
 
 # 时区
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
@@ -33,16 +33,17 @@ EXPOSE 88 749
 CMD ["/usr/sbin/krb5kdc", "-n"]
 
 
-FROM centos:latest AS client
+# 使用一个基础的 CentOS 镜像
+FROM centos:7 AS client
 
 # 维护者信息
 LABEL maintainer="yourname@example.com"
 
-# 设置阿里云的 CentOS 镜像源
-RUN sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-        -e 's|^#baseurl=http://mirror.centos.org|baseurl=http://mirrors.aliyun.com|g' \
-        -i.bak \
-        /etc/yum.repos.d/CentOS-*
+
+# 更新 yum 源配置，使用 vault 仓库
+RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*.repo && \
+    sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
+
 
 # 时区
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
