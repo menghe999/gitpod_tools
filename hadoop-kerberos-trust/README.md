@@ -11,7 +11,7 @@
 ┌──────────────────────────────┐         ┌──────────────────────────────┐
 │  Realm: EMR.1234.COM         │         │  Realm: EMR.6789.COM         │
 │                              │ 信任关系 │                              │
-│  kdc1  (172.20.0.2)  ◄──────┼─────────┼──►  kdc2  (172.20.0.3)       │
+│  kdc1  (172.28.0.2)  ◄──────┼─────────┼──►  kdc2  (172.28.0.3)       │
 │  集群A: namenode(.21)        │ krbtgt  │   集群B: namenode1(.31)      │
 │         datanode(.22)        │ 双向互信 │          datanode1(.32)      │
 │         resourcemanager      │         │                              │
@@ -28,6 +28,7 @@
 | 内存 | 建议 ≥ 8GB（2 KDC + 6 Hadoop 容器，约 4-6GB 峰值） |
 | 磁盘 | ≥ 15GB（centos:7、hadoop 镜像约 4GB + 容器数据） |
 | 端口 | 88 / 89 / 749 / 750 / 50070 / 50080 / 8088 |
+| 网段 | 默认 `172.28.0.0/24`；与现有 Docker 网络冲突时用 `SUBNET_BASE` 整体迁移（见 FAQ Q1.4） |
 | 网络 | 需能访问 Docker Hub、vault.centos.org（KDC 构建用）、archive.debian.org（验证时安装 krb5-user 用） |
 
 ## 二、快速开始（三条命令）
@@ -126,8 +127,10 @@ hdfs dfs -ls hdfs://namenode.emr.1234.com:9000/user   # 跨域访问集群 A
 
 ## 七、扩展实验（可选）
 
-- **跨集群文件同步**
-- **Flink on YARN（安全模式）**
+- **跨集群文件同步**：原项目（github.com/menghe999/gitpod_tools，`shell/hdfs/demo`）提供
+  `hdfs-file-sync` 示例，用 `test` 的 keytab 定时把集群 A 的文件拷贝到集群 B。
+- **Flink on YARN（安全模式）**：原项目 `shell/hdfs/flink-example` 演示带 Kerberos
+  参数提交 Flink 任务（`-Dsecurity.kerberos.login.keytab=... -Dsecurity.kerberos.login.principal=...`）。
 
 ## 八、安全声明
 
@@ -138,6 +141,7 @@ hdfs dfs -ls hdfs://namenode.emr.1234.com:9000/user   # 跨域访问集群 A
 
 | 现象 | 处理 |
 |---|---|
+| `01` 启动报 `Pool overlaps with other one on this address space` | 网段与现有 Docker 网络冲突：`export SUBNET_BASE=172.30.0` 后重跑 01/02/03，或删除占用网段的旧网络（见 `docs/03-常见问题.md` Q1.4） |
 | `01` 卡在"等待 KDC 就绪" | `docker logs kdc1` 查看；多为 centos:7 镜像或 vault.centos.org 拉取/访问失败 |
 | `03` 中 kinit 报 clock skew | 检查容器时间：`docker exec kdc1 date`，确认宿主时区正确 |
 | `03` 跨域访问失败 | 查看 `docs/03-常见问题.md` 的排查步骤 |

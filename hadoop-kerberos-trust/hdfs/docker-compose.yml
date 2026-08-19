@@ -41,15 +41,15 @@ services:
       - namenode-data:/hadoop/dfs/name
     networks:
       hadoop-net:
-        ipv4_address: 172.20.0.21
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.21"
     extra_hosts:
-      - "kdc1:172.20.0.2"
-      - "kdc2:172.20.0.3"
-      - "namenode.emr.1234.com:172.20.0.21"
-      - "datanode.emr.1234.com:172.20.0.22"
+      - "kdc1:${SUBNET_BASE:-172.28.0}.2"
+      - "kdc2:${SUBNET_BASE:-172.28.0}.3"
+      - "namenode.emr.1234.com:${SUBNET_BASE:-172.28.0}.21"
+      - "datanode.emr.1234.com:${SUBNET_BASE:-172.28.0}.22"
       # 对端集群 B（跨域访问时解析用）
-      - "namenode.emr.6789.com:172.20.0.31"
-      - "datanode.emr.6789.com:172.20.0.32"
+      - "namenode.emr.6789.com:${SUBNET_BASE:-172.28.0}.31"
+      - "datanode.emr.6789.com:${SUBNET_BASE:-172.28.0}.32"
 
   datanode:
     image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
@@ -77,14 +77,14 @@ services:
       - /tmp
     networks:
       hadoop-net:
-        ipv4_address: 172.20.0.22
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.22"
     extra_hosts:
-      - "kdc1:172.20.0.2"
-      - "kdc2:172.20.0.3"
-      - "namenode.emr.1234.com:172.20.0.21"
-      - "datanode.emr.1234.com:172.20.0.22"
-      - "namenode.emr.6789.com:172.20.0.31"
-      - "datanode.emr.6789.com:172.20.0.32"
+      - "kdc1:${SUBNET_BASE:-172.28.0}.2"
+      - "kdc2:${SUBNET_BASE:-172.28.0}.3"
+      - "namenode.emr.1234.com:${SUBNET_BASE:-172.28.0}.21"
+      - "datanode.emr.1234.com:${SUBNET_BASE:-172.28.0}.22"
+      - "namenode.emr.6789.com:${SUBNET_BASE:-172.28.0}.31"
+      - "datanode.emr.6789.com:${SUBNET_BASE:-172.28.0}.32"
     depends_on:
       - namenode
 
@@ -119,12 +119,12 @@ services:
     networks:
       - hadoop-net
     extra_hosts:
-      - "kdc1:172.20.0.2"
-      - "kdc2:172.20.0.3"
-      - "namenode.emr.1234.com:172.20.0.21"
-      - "datanode.emr.1234.com:172.20.0.22"
-      - "namenode.emr.6789.com:172.20.0.31"
-      - "datanode.emr.6789.com:172.20.0.32"
+      - "kdc1:${SUBNET_BASE:-172.28.0}.2"
+      - "kdc2:${SUBNET_BASE:-172.28.0}.3"
+      - "namenode.emr.1234.com:${SUBNET_BASE:-172.28.0}.21"
+      - "datanode.emr.1234.com:${SUBNET_BASE:-172.28.0}.22"
+      - "namenode.emr.6789.com:${SUBNET_BASE:-172.28.0}.31"
+      - "datanode.emr.6789.com:${SUBNET_BASE:-172.28.0}.32"
     depends_on:
       - namenode
       - datanode
@@ -157,12 +157,12 @@ services:
     networks:
       - hadoop-net
     extra_hosts:
-      - "kdc1:172.20.0.2"
-      - "kdc2:172.20.0.3"
-      - "namenode.emr.1234.com:172.20.0.21"
-      - "datanode.emr.1234.com:172.20.0.22"
-      - "namenode.emr.6789.com:172.20.0.31"
-      - "datanode.emr.6789.com:172.20.0.32"
+      - "kdc1:${SUBNET_BASE:-172.28.0}.2"
+      - "kdc2:${SUBNET_BASE:-172.28.0}.3"
+      - "namenode.emr.1234.com:${SUBNET_BASE:-172.28.0}.21"
+      - "datanode.emr.1234.com:${SUBNET_BASE:-172.28.0}.22"
+      - "namenode.emr.6789.com:${SUBNET_BASE:-172.28.0}.31"
+      - "datanode.emr.6789.com:${SUBNET_BASE:-172.28.0}.32"
     depends_on:
       - resourcemanager
 

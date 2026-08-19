@@ -36,7 +36,7 @@ services:
       - "749:749"  # kadmin 管理端口
     networks:
       kerberos-net:
-        ipv4_address: 172.20.0.2
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.2"
 
   kdc2:
     build:
@@ -62,7 +62,7 @@ services:
       - "750:749"
     networks:
       kerberos-net:
-        ipv4_address: 172.20.0.3
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.3"
 
 networks:
   kerberos-net:
@@ -70,4 +70,5 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/24
+        # 网段可通过环境变量 SUBNET_BASE 调整（如与现有网络冲突时）
+        - subnet: "${SUBNET_BASE:-172.28.0}.0/24"
