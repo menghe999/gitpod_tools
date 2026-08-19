@@ -7,6 +7,7 @@
 #   - 集群 A 用户 test@EMR.1234.COM  跨域访问集群 B   ✓
 #   - 集群 B 用户 test1@EMR.6789.COM 访问本域(集群 B) ✓
 #   - 集群 B 用户 test1@EMR.6789.COM 跨域访问集群 A   ✓
+#   - 跨域铁证：A 在 B 创建标记、B 本域可见；B 在 A 创建标记、A 本域可见 ✓
 #
 # 退出码：全部通过返回 0，任一失败返回 1。
 # ============================================================
@@ -82,8 +83,9 @@ wait_nn() {
     if docker logs "$c" 2>&1 | grep -qE "NameNode RPC (up at|server is running)"; then
       echo "  $c RPC 已就绪"
       # 等待安全模式关闭（否则 mkdir 会被 SafeModeException 拒绝）
+      # 兼容 Hadoop 2.x("Safe mode is OFF") 与 3.x("STATE* Leaving safe mode") 日志格式
       for j in $(seq 1 24); do
-        if docker logs "$c" 2>&1 | grep -q "Safe mode is OFF"; then
+        if docker logs "$c" 2>&1 | grep -qE "Safe mode is OFF|Leaving safe mode"; then
           echo "  $c 安全模式已关闭"
           return 0
         fi
@@ -111,6 +113,8 @@ run namenode "本域访问: 在集群A创建 /user/test"           hdfs dfs -mkd
 run namenode "本域访问: 列出集群A /user"                  hdfs dfs -ls hdfs://namenode.emr.1234.com:9000/user
 run namenode "跨域访问: 在集群B创建 /user/test1"          hdfs dfs -mkdir -p hdfs://namenode.emr.6789.com:9000/user/test1
 run namenode "跨域访问: 列出集群B /user"                  hdfs dfs -ls hdfs://namenode.emr.6789.com:9000/user
+# 跨域铁证：A 的用户 test 在集群 B 上创建唯一标记目录
+run namenode "跨域写入: test 在集群B创建标记 cross-check-A2B" hdfs dfs -mkdir -p hdfs://namenode.emr.6789.com:9000/user/cross-check-A2B
 
 echo
 echo "=============================================="
@@ -119,8 +123,19 @@ echo "=============================================="
 run namenode1 "kinit test1 获取本域 TGT"                  kinit -kt /root/test1.keytab test1
 run namenode1 "本域访问: 在集群B创建 /user/test1"         hdfs dfs -mkdir -p hdfs://namenode.emr.6789.com:9000/user/test1
 run namenode1 "本域访问: 列出集群B /user"                 hdfs dfs -ls hdfs://namenode.emr.6789.com:9000/user
+# 跨域铁证：B 的用户 test1 能在本域(集群B)看到 A 创建的标记
+run namenode1 "对端可见: 集群B存在 A 创建的标记 A2B"     hdfs dfs -test -d hdfs://namenode.emr.6789.com:9000/user/cross-check-A2B
 run namenode1 "跨域访问: 在集群A创建 /user/test"          hdfs dfs -mkdir -p hdfs://namenode.emr.1234.com:9000/user/test
 run namenode1 "跨域访问: 列出集群A /user"                 hdfs dfs -ls hdfs://namenode.emr.1234.com:9000/user
+# 跨域铁证：B 的用户 test1 在集群 A 上创建唯一标记目录
+run namenode1 "跨域写入: test1 在集群A创建标记 cross-check-B2A" hdfs dfs -mkdir -p hdfs://namenode.emr.1234.com:9000/user/cross-check-B2A
+
+echo
+echo "=============================================="
+echo " 跨域标记回查（铁证：数据确实落在对方集群）"
+echo "=============================================="
+# A 的用户 test 在本域(集群A)能看到 B 创建的标记
+run namenode "对端可见: 集群A存在 B 创建的标记 B2A"       hdfs dfs -test -d hdfs://namenode.emr.1234.com:9000/user/cross-check-B2A
 
 # ---------- 4) 票据信息（展示跨域 TGT） ----------
 echo
