@@ -1,0 +1,176 @@
+# ============================================================
+# HDFS 集群 A（realm: EMR.1234.COM）
+#   namenode.emr.1234.com / datanode.emr.1234.com
+#   resourcemanager / nodemanager（YARN）
+#
+# 说明：
+#   - 网络 hadoop-kerberos-net 由 kerberos/docker-compose.yml
+#     创建，此处以 external 方式加入，与两个 KDC 同网段互通；
+#   - krb5.conf 与 keytab 由 scripts/01-init-kdc.sh 生成到
+#     ./kerberos/ 目录，请先执行该脚本再启动本集群；
+#   - extra_hosts 同时声明了对端集群（.emr.6789.com）的地址，
+#     保证跨域访问时能解析到集群 B 的 NameNode。
+# ============================================================
+version: '3.8'
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    hostname: namenode.emr.1234.com
+    ports:
+      - "50070:50070"  # NameNode Web UI (HTTPS)
+    environment:
+      - CLUSTER_NAME=hdfs-cluster
+      - KRB5_REALM=EMR.1234.COM
+      - KRB5_KDC=kdc1
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro  # 时钟同步
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/nn.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos/test.keytab:/root/test.keytab   # 供验证脚本 kinit test 使用
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hadoop/ssl-server.xml:/etc/hadoop/ssl-server.xml
+      - ./hadoop/ssl-client.xml:/etc/hadoop/ssl-client.xml
+      - ./ca/bash/truststore:/etc/hadoop/truststore
+      - ./ca/bash/keystore:/etc/hadoop/keystore
+      - namenode-data:/hadoop/dfs/name
+    networks:
+      hadoop-net:
+        ipv4_address: 172.20.0.21
+    extra_hosts:
+      - "kdc1:172.20.0.2"
+      - "kdc2:172.20.0.3"
+      - "namenode.emr.1234.com:172.20.0.21"
+      - "datanode.emr.1234.com:172.20.0.22"
+      # 对端集群 B（跨域访问时解析用）
+      - "namenode.emr.6789.com:172.20.0.31"
+      - "datanode.emr.6789.com:172.20.0.32"
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    hostname: datanode.emr.1234.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
+      - KRB5_REALM=EMR.1234.COM
+      - KRB5_KDC=kdc1
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hadoop/ssl-server.xml:/etc/hadoop/ssl-server.xml
+      - ./hadoop/ssl-client.xml:/etc/hadoop/ssl-client.xml
+      - ./ca/bash/truststore:/etc/hadoop/truststore
+      - ./ca/bash/keystore:/etc/hadoop/keystore
+      - datanode-data:/hadoop/dfs/data
+    tmpfs:
+      - /tmp
+    networks:
+      hadoop-net:
+        ipv4_address: 172.20.0.22
+    extra_hosts:
+      - "kdc1:172.20.0.2"
+      - "kdc2:172.20.0.3"
+      - "namenode.emr.1234.com:172.20.0.21"
+      - "datanode.emr.1234.com:172.20.0.22"
+      - "namenode.emr.6789.com:172.20.0.31"
+      - "datanode.emr.6789.com:172.20.0.32"
+    depends_on:
+      - namenode
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: resourcemanager
+    hostname: resourcemanager.emr.1234.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
+      - KRB5_REALM=EMR.1234.COM
+      - KRB5_KDC=kdc1
+      - TZ=${TZ:-Asia/Shanghai}
+    ports:
+      - "8088:8088"  # ResourceManager Web UI
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/nn.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
+      - ./kerberos/rm.keytab:/etc/hadoop/rm.keytab
+      - ./kerberos/nm.keytab:/etc/hadoop/nm.keytab
+      - ./kerberos/test.keytab:/root/test.keytab
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hadoop/yarn-site.xml:/etc/hadoop/yarn-site.xml
+      - ./hadoop/ssl-server.xml:/etc/hadoop/ssl-server.xml
+      - ./hadoop/ssl-client.xml:/etc/hadoop/ssl-client.xml
+      - ./ca/bash/truststore:/etc/hadoop/truststore
+      - ./ca/bash/keystore:/etc/hadoop/keystore
+    networks:
+      - hadoop-net
+    extra_hosts:
+      - "kdc1:172.20.0.2"
+      - "kdc2:172.20.0.3"
+      - "namenode.emr.1234.com:172.20.0.21"
+      - "datanode.emr.1234.com:172.20.0.22"
+      - "namenode.emr.6789.com:172.20.0.31"
+      - "datanode.emr.6789.com:172.20.0.32"
+    depends_on:
+      - namenode
+      - datanode
+
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager
+    hostname: nodemanager.emr.1234.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.1234.com:9000
+      - KRB5_REALM=EMR.1234.COM
+      - KRB5_KDC=kdc1
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/nn.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
+      - ./kerberos/nm.keytab:/etc/hadoop/nm.keytab
+      - ./kerberos/rm.keytab:/etc/hadoop/rm.keytab
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hadoop/yarn-site.xml:/etc/hadoop/yarn-site.xml
+      - ./hadoop/ssl-server.xml:/etc/hadoop/ssl-server.xml
+      - ./hadoop/ssl-client.xml:/etc/hadoop/ssl-client.xml
+      - ./ca/bash/truststore:/etc/hadoop/truststore
+      - ./ca/bash/keystore:/etc/hadoop/keystore
+    networks:
+      - hadoop-net
+    extra_hosts:
+      - "kdc1:172.20.0.2"
+      - "kdc2:172.20.0.3"
+      - "namenode.emr.1234.com:172.20.0.21"
+      - "datanode.emr.1234.com:172.20.0.22"
+      - "namenode.emr.6789.com:172.20.0.31"
+      - "datanode.emr.6789.com:172.20.0.32"
+    depends_on:
+      - resourcemanager
+
+volumes:
+  namenode-data:
+  datanode-data:
+
+networks:
+  hadoop-net:
+    external: true
+    name: hadoop-kerberos-net

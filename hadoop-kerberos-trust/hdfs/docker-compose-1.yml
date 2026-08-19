@@ -1,0 +1,95 @@
+# ============================================================
+# HDFS 集群 B（realm: EMR.6789.COM）
+#   namenode.emr.6789.com / datanode.emr.6789.com
+#
+# 说明：
+#   - 与集群 A 同处 hadoop-kerberos-net 外部网络；
+#   - krb5.conf 与 keytab 由 scripts/01-init-kdc.sh 生成到
+#     ./kerberos1/ 目录（来自 kdc2），请先执行该脚本；
+#   - extra_hosts 同时声明了对端集群（.emr.1234.com）的地址。
+# ============================================================
+version: '3.8'
+
+services:
+  namenode1:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode1
+    hostname: namenode.emr.6789.com
+    ports:
+      - "50080:50070"  # NameNode Web UI (HTTPS)
+    environment:
+      - CLUSTER_NAME=hdfs-cluster
+      - KRB5_REALM=EMR.6789.COM
+      - KRB5_KDC=kdc2
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos1/krb5.conf:/etc/krb5.conf
+      - ./kerberos1/nn.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos1/test1.keytab:/root/test1.keytab  # 供验证脚本 kinit test1 使用
+      - ./hadoop1/core-site.xml:/etc/hadoop/core-site.xml
+      - ./hadoop1/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hadoop1/ssl-server.xml:/etc/hadoop/ssl-server.xml
+      - ./hadoop1/ssl-client.xml:/etc/hadoop/ssl-client.xml
+      - ./ca/bash/truststore:/etc/hadoop/truststore
+      - ./ca/bash/keystore:/etc/hadoop/keystore
+      - namenode-data1:/hadoop/dfs/name
+    networks:
+      hadoop-net:
+        ipv4_address: 172.20.0.31
+    extra_hosts:
+      - "kdc1:172.20.0.2"
+      - "kdc2:172.20.0.3"
+      - "namenode.emr.6789.com:172.20.0.31"
+      - "datanode.emr.6789.com:172.20.0.32"
+      # 对端集群 A（跨域访问时解析用）
+      - "namenode.emr.1234.com:172.20.0.21"
+      - "datanode.emr.1234.com:172.20.0.22"
+
+  datanode1:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode1
+    hostname: datanode.emr.6789.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode.emr.6789.com:9000
+      - KRB5_REALM=EMR.6789.COM
+      - KRB5_KDC=kdc2
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos1/krb5.conf:/etc/krb5.conf
+      - ./kerberos1/dn.keytab:/etc/hadoop/dn.keytab
+      - ./hadoop1/core-site.xml:/etc/hadoop/core-site.xml
+      - ./hadoop1/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./hadoop1/ssl-server.xml:/etc/hadoop/ssl-server.xml
+      - ./hadoop1/ssl-client.xml:/etc/hadoop/ssl-client.xml
+      - ./ca/bash/truststore:/etc/hadoop/truststore
+      - ./ca/bash/keystore:/etc/hadoop/keystore
+      - datanode-data1:/hadoop/dfs/data
+    tmpfs:
+      - /tmp
+    networks:
+      hadoop-net:
+        ipv4_address: 172.20.0.32
+    extra_hosts:
+      - "kdc1:172.20.0.2"
+      - "kdc2:172.20.0.3"
+      - "namenode.emr.6789.com:172.20.0.31"
+      - "datanode.emr.6789.com:172.20.0.32"
+      - "namenode.emr.1234.com:172.20.0.21"
+      - "datanode.emr.1234.com:172.20.0.22"
+    depends_on:
+      - namenode1
+
+volumes:
+  namenode-data1:
+  datanode-data1:
+
+networks:
+  hadoop-net:
+    external: true
+    name: hadoop-kerberos-net

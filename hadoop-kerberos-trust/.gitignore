@@ -1,0 +1,3 @@
+# 忽略运行期生成的凭据文件（由 scripts/01-init-kdc.sh 生成）
+hdfs/kerberos/*.keytab
+hdfs/kerberos1/*.keytab
