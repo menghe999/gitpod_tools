@@ -77,9 +77,19 @@ ensure_kinit namenode1 hdfs/kerberos1/krb5.conf
 wait_nn() {
   local c="$1"
   echo "  等待 $c (NameNode RPC) 就绪 ..."
+  # 兼容 Hadoop 2.x("server is running") 与 3.x("RPC up at") 两种日志格式
   for i in $(seq 1 72); do
-    if docker logs "$c" 2>&1 | grep -q "NameNode RPC server is running"; then
-      echo "  $c 就绪"
+    if docker logs "$c" 2>&1 | grep -qE "NameNode RPC (up at|server is running)"; then
+      echo "  $c RPC 已就绪"
+      # 等待安全模式关闭（否则 mkdir 会被 SafeModeException 拒绝）
+      for j in $(seq 1 24); do
+        if docker logs "$c" 2>&1 | grep -q "Safe mode is OFF"; then
+          echo "  $c 安全模式已关闭"
+          return 0
+        fi
+        sleep 5
+      done
+      echo "  $c RPC 已就绪，但安全模式在 120 秒内未关闭（继续执行，若后续 mkdir 失败请检查）"
       return 0
     fi
     sleep 5
