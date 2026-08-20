@@ -33,12 +33,13 @@ services:
     ports:
       - "2181:2181"
     environment:
-      - ZOO_MY_ID=1
-      - ZOO_SERVERS=server.1=zk1:2888:3888
       - TZ=${TZ:-Asia/Shanghai}
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
+      # 自定义 zoo.cfg：新版官方镜像单节点时不生成 clientPort（2181 不监听），
+      # 必须显式提供（详见 docs/03-常见问题-HA.md Q10）
+      - ./conf/zk/zoo.cfg:/conf/zoo.cfg:ro
       - zk1-data:/data
       - zk1-datalog:/datalog
     networks:
