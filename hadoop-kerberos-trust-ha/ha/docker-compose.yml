@@ -1,0 +1,417 @@
+# ============================================================
+# HDFS HA 集群（双集群 + 跨域互信 + NameNode 高可用）
+#
+#   ┌─ 共享基础层 ──────────────────────────────────────┐
+#   │ zk1        ZooKeeper（ZKFC 自动故障转移仲裁）      │
+#   │ jn1/jn2/jn3 JournalNode（QJM 共享编辑日志，        │
+#   │              同时服务 ns1234 与 ns6789）           │
+#   └───────────────────────────────────────────────────┘
+#   ┌─ 集群 A（EMR.1234.COM / ns1234）──────────────────┐
+#   │ nn1.emr.1234.com(.41) / nn2.emr.1234.com(.42)    │
+#   │ datanode.emr.1234.com(.22)                       │
+#   │ resourcemanager(.23) / nodemanager(.24)（YARN）   │
+#   └───────────────────────────────────────────────────┘
+#   ┌─ 集群 B（EMR.6789.COM / ns6789）──────────────────┐
+#   │ nn1.emr.6789.com(.51) / nn2.emr.6789.com(.52)    │
+#   │ datanode.emr.6789.com(.32)                       │
+#   └───────────────────────────────────────────────────┘
+#
+# 前提：
+#   1. 先启动 kerberos/（两个 KDC）并执行 scripts/01-init-kdc.sh
+#      （生成 krb5.conf 与 keytab 到 ./kerberos/ 与 ./kerberos1/）；
+#   2. 网络 hadoop-kerberos-net 由 kerberos/docker-compose.yml 创建，
+#      网段可用 ${SUBNET_BASE:-172.28.0} 整体迁移（01/02 需同值）。
+# ============================================================
+version: '3.8'
+
+services:
+  # ---------- ZooKeeper（ZKFC 仲裁） ----------
+  zk1:
+    image: zookeeper:3.8
+    container_name: zk1
+    hostname: zk1
+    ports:
+      - "2181:2181"
+    environment:
+      - ZOO_MY_ID=1
+      - ZOO_SERVERS=server.1=zk1:2888:3888
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - zk1-data:/data
+      - zk1-datalog:/datalog
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.10"
+
+  # ---------- JournalNode（QJM 仲裁，共享给两个集群） ----------
+  jn1:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: jn1
+    hostname: jn1.emr.1234.com
+    entrypoint: ["/bin/bash", "/root/start-jn.sh"]
+    restart: unless-stopped
+    environment:
+      - HADOOP_HEAPSIZE=512
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/jn.keytab:/etc/hadoop/jn.keytab
+      - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/journalnode/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./conf/scripts/start-jn.sh:/root/start-jn.sh:ro
+      - jn1-data:/hadoop/dfs/journal
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.11"
+    extra_hosts: &EXTRA_HOSTS
+      - "kdc1:${SUBNET_BASE:-172.28.0}.2"
+      - "kdc2:${SUBNET_BASE:-172.28.0}.3"
+      - "zk1:${SUBNET_BASE:-172.28.0}.10"
+      - "jn1:${SUBNET_BASE:-172.28.0}.11"
+      - "jn2:${SUBNET_BASE:-172.28.0}.12"
+      - "jn3:${SUBNET_BASE:-172.28.0}.13"
+      - "jn1.emr.1234.com:${SUBNET_BASE:-172.28.0}.11"
+      - "jn2.emr.1234.com:${SUBNET_BASE:-172.28.0}.12"
+      - "jn3.emr.1234.com:${SUBNET_BASE:-172.28.0}.13"
+      - "datanode.emr.1234.com:${SUBNET_BASE:-172.28.0}.22"
+      - "resourcemanager.emr.1234.com:${SUBNET_BASE:-172.28.0}.23"
+      - "nodemanager.emr.1234.com:${SUBNET_BASE:-172.28.0}.24"
+      - "datanode.emr.6789.com:${SUBNET_BASE:-172.28.0}.32"
+      - "nn1.emr.1234.com:${SUBNET_BASE:-172.28.0}.41"
+      - "nn2.emr.1234.com:${SUBNET_BASE:-172.28.0}.42"
+      - "nn1.emr.6789.com:${SUBNET_BASE:-172.28.0}.51"
+      - "nn2.emr.6789.com:${SUBNET_BASE:-172.28.0}.52"
+
+  jn2:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: jn2
+    hostname: jn2.emr.1234.com
+    entrypoint: ["/bin/bash", "/root/start-jn.sh"]
+    restart: unless-stopped
+    environment:
+      - HADOOP_HEAPSIZE=512
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/jn.keytab:/etc/hadoop/jn.keytab
+      - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/journalnode/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./conf/scripts/start-jn.sh:/root/start-jn.sh:ro
+      - jn2-data:/hadoop/dfs/journal
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.12"
+    extra_hosts: *EXTRA_HOSTS
+
+  jn3:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: jn3
+    hostname: jn3.emr.1234.com
+    entrypoint: ["/bin/bash", "/root/start-jn.sh"]
+    restart: unless-stopped
+    environment:
+      - HADOOP_HEAPSIZE=512
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/jn.keytab:/etc/hadoop/jn.keytab
+      - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/journalnode/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./conf/scripts/start-jn.sh:/root/start-jn.sh:ro
+      - jn3-data:/hadoop/dfs/journal
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.13"
+    extra_hosts: *EXTRA_HOSTS
+
+  # ---------- 集群 A：双 NameNode（ns1234） ----------
+  namenode-a1:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode-a1
+    hostname: nn1.emr.1234.com
+    entrypoint: ["/bin/bash", "/root/start-nn.sh"]
+    restart: unless-stopped
+    ports:
+      - "50070:50070"  # nn1 Web UI
+    environment:
+      - NAMESERVICE=ns1234
+      - NN_ID=nn1
+      - REALM=EMR.1234.COM
+      - DOMAIN=emr.1234.com
+      - HADOOP_HEAPSIZE=768
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/nn1.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos/test.keytab:/root/test.keytab   # 供验证脚本 kinit test
+      - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./conf/cluster-a/yarn-site.xml:/etc/hadoop/yarn-site.xml
+      - ./conf/scripts/start-nn.sh:/root/start-nn.sh:ro
+      - namenode-a1-data:/hadoop/dfs/name
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.41"
+    extra_hosts: *EXTRA_HOSTS
+    depends_on:
+      - zk1
+      - jn1
+      - jn2
+      - jn3
+
+  namenode-a2:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode-a2
+    hostname: nn2.emr.1234.com
+    entrypoint: ["/bin/bash", "/root/start-nn.sh"]
+    restart: unless-stopped
+    ports:
+      - "50071:50070"  # nn2 Web UI
+    environment:
+      - NAMESERVICE=ns1234
+      - NN_ID=nn2
+      - REALM=EMR.1234.COM
+      - DOMAIN=emr.1234.com
+      - HADOOP_HEAPSIZE=768
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/nn2.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos/test.keytab:/root/test.keytab
+      - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./conf/cluster-a/yarn-site.xml:/etc/hadoop/yarn-site.xml
+      - ./conf/scripts/start-nn.sh:/root/start-nn.sh:ro
+      - namenode-a2-data:/hadoop/dfs/name
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.42"
+    extra_hosts: *EXTRA_HOSTS
+    depends_on:
+      - zk1
+      - jn1
+      - jn2
+      - jn3
+      - namenode-a1
+
+  # ---------- 集群 B：双 NameNode（ns6789） ----------
+  namenode-b1:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode-b1
+    hostname: nn1.emr.6789.com
+    entrypoint: ["/bin/bash", "/root/start-nn.sh"]
+    restart: unless-stopped
+    ports:
+      - "50080:50070"  # nn1 Web UI
+    environment:
+      - NAMESERVICE=ns6789
+      - NN_ID=nn1
+      - REALM=EMR.6789.COM
+      - DOMAIN=emr.6789.com
+      - HADOOP_HEAPSIZE=768
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./kerberos1/krb5.conf:/etc/krb5.conf
+      - ./kerberos1/nn1.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos1/test1.keytab:/root/test1.keytab  # 供验证脚本 kinit test1
+      - ./conf/cluster-b/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/cluster-b/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./conf/scripts/start-nn.sh:/root/start-nn.sh:ro
+      - namenode-b1-data:/hadoop/dfs/name
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.51"
+    extra_hosts: *EXTRA_HOSTS
+    depends_on:
+      - zk1
+      - jn1
+      - jn2
+      - jn3
+
+  namenode-b2:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode-b2
+    hostname: nn2.emr.6789.com
+    entrypoint: ["/bin/bash", "/root/start-nn.sh"]
+    restart: unless-stopped
+    ports:
+      - "50081:50070"  # nn2 Web UI
+    environment:
+      - NAMESERVICE=ns6789
+      - NN_ID=nn2
+      - REALM=EMR.6789.COM
+      - DOMAIN=emr.6789.com
+      - HADOOP_HEAPSIZE=768
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./kerberos1/krb5.conf:/etc/krb5.conf
+      - ./kerberos1/nn2.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos1/test1.keytab:/root/test1.keytab
+      - ./conf/cluster-b/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/cluster-b/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./conf/scripts/start-nn.sh:/root/start-nn.sh:ro
+      - namenode-b2-data:/hadoop/dfs/name
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.52"
+    extra_hosts: *EXTRA_HOSTS
+    depends_on:
+      - zk1
+      - jn1
+      - jn2
+      - jn3
+      - namenode-b1
+
+  # ---------- DataNode（各集群 1 台） ----------
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    hostname: datanode.emr.1234.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://ns1234
+      - KRB5_REALM=EMR.1234.COM
+      - KRB5_KDC=kdc1
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
+      - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - datanode-data:/hadoop/dfs/data
+    tmpfs:
+      - /tmp
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.22"
+    extra_hosts: *EXTRA_HOSTS
+    depends_on:
+      - namenode-a1
+      - namenode-a2
+
+  datanode1:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode1
+    hostname: datanode.emr.6789.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://ns6789
+      - KRB5_REALM=EMR.6789.COM
+      - KRB5_KDC=kdc2
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos1/krb5.conf:/etc/krb5.conf
+      - ./kerberos1/dn.keytab:/etc/hadoop/dn.keytab
+      - ./conf/cluster-b/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/cluster-b/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - datanode1-data:/hadoop/dfs/data
+    tmpfs:
+      - /tmp
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.32"
+    extra_hosts: *EXTRA_HOSTS
+    depends_on:
+      - namenode-b1
+      - namenode-b2
+
+  # ---------- 集群 A：YARN（保留） ----------
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: resourcemanager
+    hostname: resourcemanager.emr.1234.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://ns1234
+      - KRB5_REALM=EMR.1234.COM
+      - KRB5_KDC=kdc1
+      - TZ=${TZ:-Asia/Shanghai}
+    ports:
+      - "8088:8088"  # ResourceManager Web UI
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/nn1.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos/nn2.keytab:/etc/hadoop/nn2.keytab
+      - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
+      - ./kerberos/rm.keytab:/etc/hadoop/rm.keytab
+      - ./kerberos/nm.keytab:/etc/hadoop/nm.keytab
+      - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./conf/cluster-a/yarn-site.xml:/etc/hadoop/yarn-site.xml
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.23"
+    extra_hosts: *EXTRA_HOSTS
+    depends_on:
+      - namenode-a1
+      - namenode-a2
+      - datanode
+
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager
+    hostname: nodemanager.emr.1234.com
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://ns1234
+      - KRB5_REALM=EMR.1234.COM
+      - KRB5_KDC=kdc1
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/nn1.keytab:/etc/hadoop/nn.keytab
+      - ./kerberos/nn2.keytab:/etc/hadoop/nn2.keytab
+      - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
+      - ./kerberos/rm.keytab:/etc/hadoop/rm.keytab
+      - ./kerberos/nm.keytab:/etc/hadoop/nm.keytab
+      - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./conf/cluster-a/yarn-site.xml:/etc/hadoop/yarn-site.xml
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.24"
+    extra_hosts: *EXTRA_HOSTS
+    depends_on:
+      - resourcemanager
+
+volumes:
+  zk1-data:
+  zk1-datalog:
+  jn1-data:
+  jn2-data:
+  jn3-data:
+  namenode-a1-data:
+  namenode-a2-data:
+  namenode-b1-data:
+  namenode-b2-data:
+  datanode-data:
+  datanode1-data:
+
+networks:
+  ha-net:
+    external: true
+    name: hadoop-kerberos-net

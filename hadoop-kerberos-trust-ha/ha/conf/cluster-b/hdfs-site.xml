@@ -1,0 +1,137 @@
+<configuration>
+  <!-- ============ HDFS HA 核心配置（nameservice = ns6789） ============ -->
+  <property>
+    <name>dfs.nameservices</name>
+    <value>ns6789</value>
+  </property>
+  <property>
+    <name>dfs.ha.namenodes.ns6789</name>
+    <value>nn1,nn2</value>
+  </property>
+  <property>
+    <name>dfs.namenode.rpc-address.ns6789.nn1</name>
+    <value>nn1.emr.6789.com:9000</value>
+  </property>
+  <property>
+    <name>dfs.namenode.rpc-address.ns6789.nn2</name>
+    <value>nn2.emr.6789.com:9000</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-address.ns6789.nn1</name>
+    <value>nn1.emr.6789.com:50070</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-address.ns6789.nn2</name>
+    <value>nn2.emr.6789.com:50070</value>
+  </property>
+  <!-- 共享编辑日志：与集群 A 共用同一组 3 台 JournalNode（不同 nameservice 子目录）。
+       必须用 FQDN（jn*.emr.1234.com）：NN 按连接主机名推导 jn/_HOST 服务主体 -->
+  <property>
+    <name>dfs.namenode.shared.edits.dir</name>
+    <value>qjournal://jn1.emr.1234.com:8485;jn2.emr.1234.com:8485;jn3.emr.1234.com:8485/ns6789</value>
+  </property>
+  <property>
+    <name>dfs.client.failover.proxy.provider.ns6789</name>
+    <value>org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider</value>
+  </property>
+  <property>
+    <name>dfs.ha.automatic-failover.enabled</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>ha.zookeeper.quorum</name>
+    <value>zk1:2181</value>
+  </property>
+  <property>
+    <name>dfs.ha.fencing.methods</name>
+    <value>shell(true)</value>
+  </property>
+
+  <!-- ============ NameNode Kerberos 配置 ============ -->
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>/hadoop/dfs/name</value>
+  </property>
+  <property>
+    <name>dfs.namenode.kerberos.principal</name>
+    <value>nn/_HOST@EMR.6789.COM</value>
+  </property>
+  <property>
+    <name>dfs.namenode.keytab.file</name>
+    <value>/etc/hadoop/nn.keytab</value>
+  </property>
+  <property>
+    <name>dfs.namenode.kerberos.principal.pattern</name>
+    <value>*</value>
+  </property>
+
+  <!-- JournalNode 在 EMR.1234.COM realm：集群 B 的 NN 跨域连接 JN 时按此构造服务主体 -->
+  <property>
+    <name>dfs.journalnode.kerberos.principal</name>
+    <value>jn/_HOST@EMR.1234.COM</value>
+  </property>
+  <property>
+    <name>dfs.journalnode.keytab.file</name>
+    <value>/etc/hadoop/jn.keytab</value>
+  </property>
+
+  <!-- ============ DataNode 配置 ============ -->
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>file:///hadoop/dfs/data</value>
+  </property>
+  <property>
+    <name>dfs.datanode.kerberos.principal</name>
+    <value>dn/datanode.emr.6789.com@EMR.6789.COM</value>
+  </property>
+  <property>
+    <name>dfs.datanode.keytab.file</name>
+    <value>/etc/hadoop/dn.keytab</value>
+  </property>
+  <property>
+    <name>dfs.datanode.address</name>
+    <value>0.0.0.0:61004</value>
+  </property>
+  <property>
+    <name>dfs.datanode.http.address</name>
+    <value>0.0.0.0:61006</value>
+  </property>
+
+  <!-- Web UI 认证（HTTP_ONLY 简化 bootstrapStandby 的 fsimage 传输） -->
+  <property>
+    <name>dfs.http.policy</name>
+    <value>HTTP_ONLY</value>
+  </property>
+  <property>
+    <name>dfs.web.authentication.kerberos.principal</name>
+    <value>HTTP/_HOST@EMR.6789.COM</value>
+  </property>
+  <property>
+    <name>dfs.web.authentication.kerberos.keytab</name>
+    <value>/etc/hadoop/nn.keytab</value>
+  </property>
+
+  <!-- 安全配置 -->
+  <property>
+    <name>dfs.data.transfer.protection</name>
+    <value>integrity</value>
+  </property>
+  <property>
+    <name>dfs.block.access.token.enable</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>dfs.permissions.enabled</name>
+    <value>false</value>
+  </property>
+
+  <!-- 其他配置 -->
+  <property>
+    <name>dfs.replication</name>
+    <value>1</value>
+  </property>
+  <property>
+    <name>dfs.namenode.datanode.registration.ip-hostname-check</name>
+    <value>false</value>
+  </property>
+</configuration>
