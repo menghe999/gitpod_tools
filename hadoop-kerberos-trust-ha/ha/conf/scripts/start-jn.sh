@@ -26,10 +26,16 @@ IP="$(getent hosts "$FQDN" | awk '{print $1}' | head -1)"
 SHORT="$(echo "$FQDN" | cut -d. -f1)"
 
 if [ -n "$IP" ] && [ -n "$FQDN" ]; then
-  # 清除该 IP 与短主机名的旧映射（docker 有时把容器短名排在 FQDN 前）
-  sed -i "/^$IP[[:space:]]/d" /etc/hosts 2>/dev/null || true
-  sed -i "/[[:space:]]${SHORT}$/d" /etc/hosts 2>/dev/null || true
-  echo "$IP $FQDN $SHORT" >> /etc/hosts
+  # 不能用 sed -i：/etc/hosts 是 bind mount，sed -i 的 rename 覆盖会报
+  # "Device or resource busy" 失败（被 || true 吞掉），旧行删不掉。
+  # 用 cat 原地重写（truncate+write，不 rename），保证该 IP 的第一条记录是 FQDN。
+  {
+    grep -vE "^${IP}[[:space:]]" /etc/hosts \
+      | grep -vE "[[:space:]]${SHORT}([[:space:]]|\$)"
+    echo "$IP $FQDN $SHORT"
+  } > /etc/hosts.jnfix
+  cat /etc/hosts.jnfix > /etc/hosts
+  rm -f /etc/hosts.jnfix
 fi
 
 CANON="$(getent hosts "$IP" 2>/dev/null | awk '{print $2}' | head -1)"
