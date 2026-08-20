@@ -57,12 +57,16 @@ echo "  等待 JournalNode RPC (8485) 就绪 ..."
 for i in $(seq 1 60); do
   READY=1
   for jn in jn1 jn2 jn3; do
-    if ! docker exec "$jn" bash -c '(exec 3<>/dev/tcp/localhost/8485) 2>/dev/null'; then
+    if ! docker exec "$jn" bash -c '(exec 3<>/dev/tcp/localhost/8485) 2>/dev/null' 2>/dev/null; then
       READY=0
       break
     fi
   done
   [ "$READY" -eq 1 ] && break
+  # 每 6 轮（30 秒）打印一次进度，避免容器 restarting 时静默超时
+  if [ $((i % 6)) -eq 0 ]; then
+    echo "  仍在等待 JN 就绪（已 $((i*5)) 秒），jn1 状态: $(docker ps -a --filter name=jn1 --format '{{.Status}}')"
+  fi
   sleep 5
 done
 if [ "$READY" -ne 1 ]; then

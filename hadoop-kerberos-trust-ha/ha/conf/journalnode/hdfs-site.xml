@@ -23,6 +23,22 @@
     <value>/etc/hadoop/jn.keytab</value>
   </property>
 
+  <!-- JN Web 服务 (8480) 的 SPNEGO 认证：必须显式配置 principal，
+       否则 HttpServer2 初始化 Kerberos 过滤器时因缺少主体直接崩溃
+       （"Principal not defined in configuration"）。HTTP/jnX 主体在 jn.keytab 中。 -->
+  <property>
+    <name>dfs.web.authentication.kerberos.principal</name>
+    <value>HTTP/_HOST@EMR.1234.COM</value>
+  </property>
+  <property>
+    <name>dfs.web.authentication.kerberos.keytab</name>
+    <value>/etc/hadoop/jn.keytab</value>
+  </property>
+  <property>
+    <name>dfs.journalnode.kerberos.internal.spnego.principal</name>
+    <value>HTTP/_HOST@EMR.1234.COM</value>
+  </property>
+
   <property>
     <name>dfs.http.policy</name>
     <value>HTTP_ONLY</value>
