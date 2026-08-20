@@ -22,11 +22,33 @@ NS="${NAMESERVICE:?需要环境变量 NAMESERVICE}"
 NNID="${NN_ID:?需要环境变量 NN_ID}"
 REALM="${REALM:?需要环境变量 REALM}"
 DOMAIN="${DOMAIN:?需要环境变量 DOMAIN}"
-HOST="$(hostname -f)"
 NAME_DIR=/hadoop/dfs/name
 
 log()  { echo "[NN:$NNID] $*"; }
 fail() { echo "[NN:$NNID] 错误: $*" >&2; exit 1; }
+
+# ---------- 主机名修正：确保 canonical hostname = FQDN ----------
+# 与 start-jn.sh 同一问题：JVM 反向解析本容器 IP 可能得到短主机名（nn1 而非
+# nn1.emr.1234.com），NN 守护进程（及 nn1 format 初始化 QJM）按 nn/nn1@REALM
+# （keytab 中没有）登录失败 → 9000 永不监听 → 02 脚本一直"等待 NameNode RPC 就绪"。
+# 修复：把 IP→FQDN 写入 /etc/hosts（NSS files 优先于 docker DNS），并断言结果。
+FQDN="$(cat /etc/hostname 2>/dev/null || hostname)"
+IP="$(getent hosts "$FQDN" | awk '{print $1}' | head -1)"
+[ -n "$IP" ] || IP="$(hostname -i 2>/dev/null | awk '{print $1}')"
+SHORT="$(echo "$FQDN" | cut -d. -f1)"
+
+if [ -n "$IP" ] && [ -n "$FQDN" ]; then
+  sed -i "/^$IP[[:space:]]/d" /etc/hosts 2>/dev/null || true
+  sed -i "/[[:space:]]${SHORT}$/d" /etc/hosts 2>/dev/null || true
+  echo "$IP $FQDN $SHORT" >> /etc/hosts
+fi
+
+CANON="$(getent hosts "$IP" 2>/dev/null | awk '{print $2}' | head -1)"
+log "hostname=$FQDN ip=$IP canonical=$CANON"
+if [ -z "$CANON" ] || [ "$CANON" != "$FQDN" ]; then
+  fail "canonical hostname 解析为 '${CANON:-空}'（期望 '$FQDN'），Kerberos 主体会变成 nn/$SHORT@REALM 导致登录失败"
+fi
+HOST="$FQDN"
 
 # ---------- 工具：TCP 端口等待 ----------
 wait_tcp() {
