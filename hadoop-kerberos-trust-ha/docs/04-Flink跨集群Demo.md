@@ -45,12 +45,14 @@
 bash scripts/04-flink-setup.sh
 ```
 
+- 启动 `flink-client` 容器（bde2020/hadoop-namenode 镜像，JDK8 + Hadoop 3.2.1，
+  挂载 `flink/`、`test.keytab`、cluster-a 配置，静态 IP `.60`）；
+- **冒烟测试（下载前）**：RM 8088 可达 + test 租户 JAAS（免 kinit）访问 ns1234 与
+  跨域 ns6789——任何一步失败立即报错并给排查指引，避免白下 330MB；
 - 下载 `flink-1.18.1-bin-scala_2.12.tgz` 到 `flink/dist/`（幂等，已存在则跳过）；
 - 应用 `flink/conf/flink-conf.yaml` 到 `dist/conf/`；
 - 确保 `dist/lib` 有 `flink-connector-files`（FileSource/FileSink 依赖，缺失则从
-  Maven 中央仓库补下）；
-- 启动 `flink-client` 容器（bde2020/hadoop-namenode 镜像，JDK8 + Hadoop 3.2.1，
-  挂载 `flink/`、`test.keytab`、cluster-a 配置，静态 IP `.60`）。
+  Maven 中央仓库补下）。
 
 ### 2) 提交演示作业（05）
 
