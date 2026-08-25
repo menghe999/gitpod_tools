@@ -28,23 +28,41 @@ log()  { echo "[NN:$NNID] $*"; }
 fail() { echo "[NN:$NNID] 错误: $*" >&2; exit 1; }
 
 # ---------- 主机名修正：确保 canonical hostname = FQDN ----------
-# 与 start-jn.sh 同一问题：JVM 反向解析本容器 IP 可能得到短主机名（nn1 而非
-# nn1.emr.1234.com），NN 守护进程（及 nn1 format 初始化 QJM）按 nn/nn1@REALM
-# （keytab 中没有）登录失败 → 9000 永不监听 → 02 脚本一直"等待 NameNode RPC 就绪"。
-# 修复：把 IP→FQDN 写入 /etc/hosts（NSS files 优先于 docker DNS），并断言结果。
+# 服务端方向（与 start-jn.sh 同一问题）：JVM 反向解析本容器 IP 可能得到短主机名
+# （nn1 而非 nn1.emr.1234.com），NN 守护进程（及 nn1 format 初始化 QJM）按
+# nn/nn1@REALM（keytab 中没有）登录失败 → 9000 永不监听 → 02 脚本一直等待。
+# 客户端方向（FAQ Q12）：NN 连接 JN 时按 JN 地址的 canonical hostname（反向解析
+# 结果）推导 jn/_HOST 服务主体。若 /etc/hosts 里 JN 的短名（jn3）排在 FQDN
+# （jn3.emr.1234.com）之前，反解 JN 的 IP 会得到 jn3 → 期望主体 jn/jn3@REALM，
+# 与 keytab 的 FQDN 主体不匹配 → format/连 JN 静默失败（QuorumException）。
+# 修复：把本容器 IP 与每台 JN 的 IP 都重写为 FQDN 打头（NSS files 优先于
+# docker DNS），并断言反向解析结果。
 FQDN="$(cat /etc/hostname 2>/dev/null || hostname)"
 IP="$(getent hosts "$FQDN" | awk '{print $1}' | head -1)"
 [ -n "$IP" ] || IP="$(hostname -i 2>/dev/null | awk '{print $1}')"
 SHORT="$(echo "$FQDN" | cut -d. -f1)"
 
+# 从 hdfs-site.xml 的 qjournal URI 解析 JN 主机名（3 台 JN 共享，固定 FQDN）
+JN_FQDNs="$(sed -n 's#.*qjournal://\([^/]*\)/.*#\1#p' /etc/hadoop/hdfs-site.xml \
+  | tr ';' '\n' | cut -d: -f1)"
+FIX_IPS="$IP"
+for jh in $JN_FQDNs; do
+  jip="$(getent hosts "$jh" | awk '{print $1}' | head -1)"
+  [ -n "$jip" ] && FIX_IPS="$FIX_IPS $jip"
+done
+
 if [ -n "$IP" ] && [ -n "$FQDN" ]; then
   # 不能用 sed -i：/etc/hosts 是 bind mount，sed -i 的 rename 覆盖会报
   # "Device or resource busy" 失败（被 || true 吞掉），旧行删不掉。
-  # 用 cat 原地重写（truncate+write，不 rename），保证该 IP 的第一条记录是 FQDN。
+  # 用 cat 原地重写（truncate+write，不 rename），保证这些 IP 的第一条记录是 FQDN。
   {
-    grep -vE "^${IP}[[:space:]]" /etc/hosts \
+    grep -vE "^($(echo "$FIX_IPS" | tr ' ' '|'))[[:space:]]" /etc/hosts \
       | grep -vE "[[:space:]]${SHORT}([[:space:]]|\$)"
     echo "$IP $FQDN $SHORT"
+    for jh in $JN_FQDNs; do
+      jip="$(getent hosts "$jh" | awk '{print $1}' | head -1)"
+      [ -n "$jip" ] && echo "$jip $jh"
+    done
   } > /etc/hosts.jnfix
   cat /etc/hosts.jnfix > /etc/hosts
   rm -f /etc/hosts.jnfix
@@ -55,6 +73,14 @@ log "hostname=$FQDN ip=$IP canonical=$CANON"
 if [ -z "$CANON" ] || [ "$CANON" != "$FQDN" ]; then
   fail "canonical hostname 解析为 '${CANON:-空}'（期望 '$FQDN'），Kerberos 主体会变成 nn/$SHORT@REALM 导致登录失败"
 fi
+for jh in $JN_FQDNs; do
+  jip="$(getent hosts "$jh" | awk '{print $1}' | head -1)"
+  jcanon="$(getent hosts "$jip" 2>/dev/null | awk '{print $2}' | head -1)"
+  log "JN $jh ip=${jip:-未解析} canonical=${jcanon:-未解析}"
+  if [ -z "$jip" ] || [ "$jcanon" != "$jh" ]; then
+    fail "JN $jh 的 canonical hostname 解析为 '${jcanon:-空}'（期望 '$jh'），NN 客户端推导 jn/_HOST 会得到短名 → QJM 认证失败（FAQ Q12）"
+  fi
+done
 HOST="$FQDN"
 
 # ---------- 工具：TCP 端口等待 ----------
@@ -97,9 +123,10 @@ trap 'log "收到终止信号，停止 NameNode/ZKFC"; kill $NN_PID $ZKFC_PID 2>
 
 # ---------- 1) 等待依赖：ZK + 3 台 JN + 对端 NN ----------
 wait_tcp zk1 2181 "ZooKeeper"
-wait_tcp jn1 8485 "JournalNode-1"
-wait_tcp jn2 8485 "JournalNode-2"
-wait_tcp jn3 8485 "JournalNode-3"
+# JN 地址取自已解析的 qjournal URI：3 台 JN 共享且固定位于 emr.1234.com（双集群一致）
+for jh in $JN_FQDNs; do
+  wait_tcp "$jh" 8485 "JournalNode-${jh%%.*}"
+done
 
 if [ "$NNID" = "nn1" ]; then OTHER=nn2; else OTHER=nn1; fi
 
@@ -107,20 +134,7 @@ if [ "$NNID" = "nn1" ]; then OTHER=nn2; else OTHER=nn1; fi
 if [ ! -d "$NAME_DIR/current" ]; then
   if [ "$NNID" = "nn1" ]; then
     log "首次启动：格式化 NameNode（同时初始化 QJM 共享编辑日志）"
-    # ===== [诊断] 临时补丁：捕获 format 完整输出/退出码，定位 compose 环境下 format 静默失败（排查后移除）=====
-    export HADOOP_ROOT_LOGGER=INFO,console
-    export HADOOP_CLIENT_OPTS="${HADOOP_CLIENT_OPTS:-} -Dlog4j.debug=true"
-    df -h "$NAME_DIR" 2>&1 | sed 's/^/[diagnose] /' || true
-    set +e
-    hdfs namenode -format -force -nonInteractive > /tmp/format.out 2>&1
-    RC=$?
-    set -e
-    echo "===== FORMAT_RC=$RC ====="
-    tail -150 /tmp/format.out
-    echo "===== 关键行 ====="
-    grep -nE 'Exception|ERROR|FATAL|abort|Caused by|Login|GSS|SASL|krb|WARN' /tmp/format.out | tail -30 || true
-    [ "$RC" -eq 0 ] || exit "$RC"
-    # ===== [诊断结束] =====
+    hdfs namenode -format -force -nonInteractive
   else
     log "首次启动：等待对端 $OTHER.$DOMAIN 成为 active ..."
     kinit -kt /etc/hadoop/nn.keytab "nn/$HOST@$REALM" || fail "kinit 失败"

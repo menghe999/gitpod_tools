@@ -26,7 +26,8 @@
   </property>
   <!-- 共享编辑日志：3 台 JournalNode 组成 QJM 仲裁（可容忍 1 台宕机）。
        必须用 FQDN：NN 按连接主机名推导 jn/_HOST 服务主体，
-       短主机名会推导出 jn/jn1@REALM（缺少域名）导致 Kerberos 认证失败 -->
+       短主机名会推导出 jn/jn1@REALM（缺少域名）导致 Kerberos 认证失败；
+       另见 FAQ Q12——/etc/hosts 中短名条目排在 FQDN 前也会让反解得到短名 -->
   <property>
     <name>dfs.namenode.shared.edits.dir</name>
     <value>qjournal://jn1.emr.1234.com:8485;jn2.emr.1234.com:8485;jn3.emr.1234.com:8485/ns1234</value>

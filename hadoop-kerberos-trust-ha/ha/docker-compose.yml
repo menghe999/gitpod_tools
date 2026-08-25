@@ -72,9 +72,9 @@ services:
       - "kdc1:${SUBNET_BASE:-172.28.0}.2"
       - "kdc2:${SUBNET_BASE:-172.28.0}.3"
       - "zk1:${SUBNET_BASE:-172.28.0}.10"
-      - "jn1:${SUBNET_BASE:-172.28.0}.11"
-      - "jn2:${SUBNET_BASE:-172.28.0}.12"
-      - "jn3:${SUBNET_BASE:-172.28.0}.13"
+      # JN 只保留 FQDN 条目：若短名（172.28.0.13 jn3）排在 FQDN 前，NN 反解 JN 的 IP
+      # 会得到短名 jn3 → 期望主体 jn/jn3@REALM 与 keytab 不匹配 → QJM 认证失败（FAQ Q12）。
+      # 短名（jn1/jn2/jn3）由 Docker DNS 提供（容器名即短名），无需 /etc/hosts 条目。
       - "jn1.emr.1234.com:${SUBNET_BASE:-172.28.0}.11"
       - "jn2.emr.1234.com:${SUBNET_BASE:-172.28.0}.12"
       - "jn3.emr.1234.com:${SUBNET_BASE:-172.28.0}.13"
