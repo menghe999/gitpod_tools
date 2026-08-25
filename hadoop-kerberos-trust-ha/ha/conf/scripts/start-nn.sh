@@ -107,7 +107,20 @@ if [ "$NNID" = "nn1" ]; then OTHER=nn2; else OTHER=nn1; fi
 if [ ! -d "$NAME_DIR/current" ]; then
   if [ "$NNID" = "nn1" ]; then
     log "首次启动：格式化 NameNode（同时初始化 QJM 共享编辑日志）"
-    hdfs namenode -format -force -nonInteractive
+    # ===== [诊断] 临时补丁：捕获 format 完整输出/退出码，定位 compose 环境下 format 静默失败（排查后移除）=====
+    export HADOOP_ROOT_LOGGER=INFO,console
+    export HADOOP_CLIENT_OPTS="${HADOOP_CLIENT_OPTS:-} -Dlog4j.debug=true"
+    df -h "$NAME_DIR" 2>&1 | sed 's/^/[diagnose] /' || true
+    set +e
+    hdfs namenode -format -force -nonInteractive > /tmp/format.out 2>&1
+    RC=$?
+    set -e
+    echo "===== FORMAT_RC=$RC ====="
+    tail -150 /tmp/format.out
+    echo "===== 关键行 ====="
+    grep -nE 'Exception|ERROR|FATAL|abort|Caused by|Login|GSS|SASL|krb|WARN' /tmp/format.out | tail -30 || true
+    [ "$RC" -eq 0 ] || exit "$RC"
+    # ===== [诊断结束] =====
   else
     log "首次启动：等待对端 $OTHER.$DOMAIN 成为 active ..."
     kinit -kt /etc/hadoop/nn.keytab "nn/$HOST@$REALM" || fail "kinit 失败"
