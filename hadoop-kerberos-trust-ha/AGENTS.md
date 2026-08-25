@@ -126,7 +126,7 @@ compose 中每服务都有完整 `extra_hosts`（YAML 锚点 `*EXTRA_HOSTS`）�
 | NN 卡"等待 ZooKeeper (zk1:2181)" | zookeeper:3.8 镜像单节点不监听 2181 → `conf/zk/zoo.cfg` 显式 clientPort；`--force-recreate zk1`（Q10） |
 | JN/NN 重启循环 "Unable to obtain password from user" | `_HOST` 被反解成短主机名 → `start-jn.sh/start-nn.sh` 已写 /etc/hosts 固化 FQDN；**勿用 sed -i 改 /etc/hosts**（bind mount 会报 Device or resource busy），须 `cat >` 原地重写（Q11） |
 | NN format 静默失败/重启循环 "Server has invalid Kerberos principal ... expecting: jn/jn3@..." | NN→JN 客户端方向 `_HOST` 反解竞态：`extra_hosts` 短名（jn3）排在 FQDN 前 → 已移除 jn1-3 短名条目；`start-nn.sh` 把 JN IP 重写为 FQDN 打头并逐台断言（Q12） |
-| NN 在"RPC 就绪"/"等待对端 active"后静默 exit 1 重启（无报错） | 镜像缺 krb5-user（kinit 缺失）且本环境 stderr 不落盘 → `start-nn.sh` 已内置 `ensure_kinit` 自动安装 + `kinit_nn` 显式输出，`fail()` 走 stdout（Q13） |
+| NN 在"RPC 就绪"/"等待对端 active"后静默 exit 1 重启（无报错） | 镜像缺 krb5-user（kinit 缺失）且容器 apt 不可靠 → `start-nn.sh` 已移除 kinit 依赖：状态检查用 JMX/curl，zkfc/bootstrapStandby 由 JVM 自登录；`fail()`/EXIT trap 走 stdout（Q13） |
 | 跨域报 "Server not found in Kerberos database" | keytab 与 KDC 不匹配 → 重跑 01；extra_hosts 缺失；时钟偏差（Q6） |
 
 ## 8. 手动验证常用命令（代理排查时直接用）
