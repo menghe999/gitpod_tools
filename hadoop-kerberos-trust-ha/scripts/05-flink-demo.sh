@@ -41,6 +41,7 @@ Client {
 };
 EOF
     export HADOOP_OPTS=\"-Djava.security.auth.login.config=/tmp/hdfs.login -Djavax.security.auth.useSubjectCredsOnly=false\"
+    export YARN_OPTS=\"\$HADOOP_OPTS\"   # yarn CLI 不继承 HADOOP_OPTS，需显式带上 JAAS 参数
     export HADOOP_CONF_DIR=/etc/hadoop
     $*
   "
