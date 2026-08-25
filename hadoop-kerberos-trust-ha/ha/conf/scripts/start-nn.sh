@@ -111,12 +111,13 @@ wait_tcp() {
 
 # ---------- 工具：NN 状态查询（JMX over HTTP，免 kinit/TGT） ----------
 # 镜像无 krb5-user 且 apt 不可靠（FAQ Q13），不用 hdfs haadmin（需要 TGT），
-# 改查 NN Web UI 的 JMX：Web 为 HTTP_ONLY 匿名访问，
-# FSNamesystemState bean 的 state 字段取值 active / standby。
+# 改查 NN Web UI 的 JMX：Web 为 HTTP_ONLY 匿名访问。
+# 注意：主备状态在 NameNodeStatus bean 的 State 字段（active/standby），
+# FSNamesystemState 只有 FSState=Operational，没有 active/standby（曾导致误判超时）。
 nn_state() {
   curl -s --max-time 5 \
-    "http://${1}.${DOMAIN}:50070/jmx?qry=Hadoop:service=NameNode,name=FSNamesystemState" 2>/dev/null \
-    | sed -n 's/.*"state"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+    "http://${1}.${DOMAIN}:50070/jmx?qry=Hadoop:service=NameNode,name=NameNodeStatus" 2>/dev/null \
+    | sed -n 's/.*"State"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
 }
 
 # ---------- 工具：等待本 NN 的 ZKFC 状态落定（active 或 standby 均可） ----------
@@ -176,14 +177,25 @@ fi
 wait_tcp "$HOST" 9000 "NameNode RPC" 240
 
 # ---------- 4) nn1 初始化 ZK（zkfc 自 keytab 登录，无需 kinit） ----------
+# 注意：3.2.1 的 zkfc 没有 -ns 参数（误传会 badArg 报错，曾导致 formatZK 失败、
+# ZKFC 守护进程直接退出）；nameservice 由配置决定。加 -force -nonInteractive
+# 避免交互式确认（容器内无 TTY 会失败）。
 if [ "$NNID" = "nn1" ]; then
   log "初始化 ZooKeeper 故障转移元数据（hdfs zkfc -formatZK）"
-  hdfs zkfc -formatZK -ns "$NS" || log "formatZK 返回非零（znode 可能已存在，忽略）"
+  if ! fmt_out="$(hdfs zkfc -formatZK -force -nonInteractive 2>&1)"; then
+    if echo "$fmt_out" | grep -qi "already exists"; then
+      log "formatZK：znode 已存在（重启幂等场景），继续"
+    else
+      log "formatZK 失败，输出："
+      echo "$fmt_out" | tail -30 | sed 's/^/  /'
+      fail "formatZK 失败，请查看上方输出"
+    fi
+  fi
 fi
 
 # ---------- 5) 启动 ZKFC（自动故障转移控制器）并保持前台 ----------
 log "启动 ZKFC"
-hdfs zkfc -ns "$NS" &
+hdfs zkfc &
 ZKFC_PID=$!
 
 wait_zkfc_settled 90
