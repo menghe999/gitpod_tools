@@ -139,6 +139,7 @@ compose 中每服务都有完整 `extra_hosts`（YAML 锚点 `*EXTRA_HOSTS`）�
 | NN 在"RPC 就绪"/"等待对端 active"后静默 exit 1 重启（无报错） | 镜像缺 krb5-user（kinit 缺失）且容器 apt 不可靠 → `start-nn.sh` 已移除 kinit 依赖：状态检查用 JMX/curl，zkfc/bootstrapStandby 由 JVM 自登录；`fail()`/EXIT trap 走 stdout（Q13） |
 | DataNode 报 "Cannot start secure DataNode due to incorrect config"（登录已成功） | checkSecureConfig 要求 jsvc 特权端口或 HTTPS_ONLY+sasl resolver；HA 版全链路 HTTP_ONLY → 已加 `ignore.secure.ports.for.testing=true`（官方测试逃生口，注意无 `dfs.` 前缀，Q14） |
 | Flink TM 报 NoClassDefFoundError（hadoop 类） | Flink 1.18 的 AM/TM 类路径只来自 hadoop 配置 `yarn.application.classpath`（`Utils.setupYarnClassPath`），不继承客户端 HADOOP_CLASSPATH → cluster-a/yarn-site.xml 已配容器内绝对路径 /opt/hadoop-3.2.1（docs/04） |
+| 脚本 `set -u` 报 `xxx�: unbound variable`（变量已赋值） | bash 多字节解析怪癖：`$VAR` 后紧跟中文/全角字符时首字节被吞进变量名 → 一律写 `${VAR}`；审计命令见 FAQ Q15 |
 | 跨域报 "Server not found in Kerberos database" | keytab 与 KDC 不匹配 → 重跑 01；extra_hosts 缺失；时钟偏差（Q6） |
 
 ## 8. 手动验证常用命令（代理排查时直接用）
