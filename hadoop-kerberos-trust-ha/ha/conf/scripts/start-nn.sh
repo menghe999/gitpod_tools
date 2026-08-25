@@ -25,7 +25,42 @@ DOMAIN="${DOMAIN:?需要环境变量 DOMAIN}"
 NAME_DIR=/hadoop/dfs/name
 
 log()  { echo "[NN:$NNID] $*"; }
-fail() { echo "[NN:$NNID] 错误: $*" >&2; exit 1; }
+# 本环境实测：容器日志对 stderr 不保证落盘（此前 format/kinit 的报错全部"静默"），
+# 因此所有诊断统一走 stdout（log()）；异常退出用 EXIT trap 留痕。
+fail() { echo "[NN:$NNID] 错误: $*"; exit 1; }
+trap 'rc=$?; [ "$rc" -ne 0 ] && echo "[NN:${NNID:-?}] 脚本异常退出 rc=$rc"' EXIT
+
+# ---------- 工具：确保 kinit 可用（bde2020 镜像默认无 krb5-user）----------
+# 与 scripts/03-verify.sh 的 ensure_kinit 同法：从 stretch 归档源安装 krb5-user。
+# 之前 NN 在 kinit 一步"静默 exit 1"重启循环，根因就是镜像里没有 kinit 二进制
+# （format 成功是因为 Java UGI 内部 keytab 登录，不依赖 kinit）。
+ensure_kinit() {
+  if command -v kinit >/dev/null 2>&1; then return 0; fi
+  log "未找到 kinit（krb5-user 缺失），从 stretch 归档源安装 ..."
+  cp /etc/krb5.conf /etc/krb5.conf.bak 2>/dev/null || true  # apt 可能改写 krb5.conf（bind mount）
+  echo "deb http://archive.debian.org/debian stretch main contrib non-free" > /etc/apt/sources.list
+  echo "deb http://archive.debian.org/debian-security stretch/updates main contrib non-free" >> /etc/apt/sources.list
+  echo "Acquire::Check-Valid-Until false;" > /etc/apt/apt.conf.d/99no-check-valid-until
+  DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1
+  DEBIAN_FRONTEND=noninteractive apt-get install -y krb5-user >/dev/null 2>&1
+  cp /etc/krb5.conf.bak /etc/krb5.conf 2>/dev/null || true
+  rm -f /etc/krb5.conf.bak
+  command -v kinit >/dev/null 2>&1 || fail "krb5-user 安装失败（无法访问 archive.debian.org？）"
+  log "krb5-user 安装完成"
+}
+
+# ---------- 工具：kinit（显式捕获输出，避免静默失败）----------
+kinit_nn() {
+  local out rc
+  out="$(kinit -kt /etc/hadoop/nn.keytab "nn/$HOST@$REALM" 2>&1)"
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    log "kinit 失败 (rc=$rc)，输出："
+    echo "$out" | sed 's/^/  /'
+    fail "kinit 失败 rc=$rc"
+  fi
+  [ -z "$out" ] || log "kinit: $(echo "$out" | head -1)"
+}
 
 # ---------- 主机名修正：确保 canonical hostname = FQDN ----------
 # 服务端方向（与 start-jn.sh 同一问题）：JVM 反向解析本容器 IP 可能得到短主机名
@@ -121,6 +156,9 @@ wait_zkfc_settled() {
 # 容器退出时尽量优雅地停掉子进程（QJM 编辑日志是同步落盘的）
 trap 'log "收到终止信号，停止 NameNode/ZKFC"; kill $NN_PID $ZKFC_PID 2>/dev/null || true' TERM INT
 
+# ---------- 0) 确保 kinit 可用（镜像默认无 krb5-user，见上 ensure_kinit）----------
+ensure_kinit
+
 # ---------- 1) 等待依赖：ZK + 3 台 JN + 对端 NN ----------
 wait_tcp zk1 2181 "ZooKeeper"
 # JN 地址取自已解析的 qjournal URI：3 台 JN 共享且固定位于 emr.1234.com（双集群一致）
@@ -137,7 +175,7 @@ if [ ! -d "$NAME_DIR/current" ]; then
     hdfs namenode -format -force -nonInteractive
   else
     log "首次启动：等待对端 $OTHER.$DOMAIN 成为 active ..."
-    kinit -kt /etc/hadoop/nn.keytab "nn/$HOST@$REALM" || fail "kinit 失败"
+    kinit_nn
     st=""
     for i in $(seq 1 90); do
       st="$(nn_state "$OTHER")"
@@ -161,7 +199,7 @@ fi
 wait_tcp "$HOST" 9000 "NameNode RPC" 240
 
 # ---------- 4) kinit（供 haadmin 状态查询） + nn1 初始化 ZK ----------
-kinit -kt /etc/hadoop/nn.keytab "nn/$HOST@$REALM" || fail "kinit 失败"
+kinit_nn
 if [ "$NNID" = "nn1" ]; then
   log "初始化 ZooKeeper 故障转移元数据（hdfs zkfc -formatZK）"
   hdfs zkfc -formatZK -ns "$NS" || log "formatZK 返回非零（znode 可能已存在，忽略）"

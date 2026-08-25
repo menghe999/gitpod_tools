@@ -84,7 +84,7 @@ wait_nn() {
   local c="$1"
   echo "  等待 $c (NameNode RPC) 就绪 ..."
   for i in $(seq 1 96); do   # 最长 480 秒（含 format + bootstrapStandby）
-    if docker logs "$c" 2>&1 | grep -qE "NameNode RPC (up at|server is running)"; then
+    if docker logs "$c" 2>&1 | grep -qE "NameNode RPC (up at|server is running|就绪)"; then
       echo "  $c RPC 已就绪"
       return 0
     fi
