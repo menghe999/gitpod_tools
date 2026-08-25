@@ -35,7 +35,7 @@
 
 1. 已完成 `bash scripts/01-init-kdc.sh`（生成 `ha/kerberos/test.keytab`）与
    `bash scripts/02-start-hdfs.sh`（NN 集群 + YARN 均就绪）；
-2. 容器可访问外网下载 Flink 发行版（首次约 330MB，仅需一次）。
+2. 容器可访问外网下载 Flink 发行版（首次约 460MB，仅需一次）。
 
 ## 步骤
 
@@ -48,7 +48,7 @@ bash scripts/04-flink-setup.sh
 - 启动 `flink-client` 容器（bde2020/hadoop-namenode 镜像，JDK8 + Hadoop 3.2.1，
   挂载 `flink/`、`test.keytab`、cluster-a 配置，静态 IP `.60`）；
 - **冒烟测试（下载前）**：RM 8088 可达 + test 租户 JAAS（免 kinit）访问 ns1234 与
-  跨域 ns6789——任何一步失败立即报错并给排查指引，避免白下 330MB；
+  跨域 ns6789——任何一步失败立即报错并给排查指引，避免白下 460MB；
 - 下载 `flink-1.18.1-bin-scala_2.12.tgz` 到 `flink/dist/`（幂等，已存在则跳过）；
 - 应用 `flink/conf/flink-conf.yaml` 到 `dist/conf/`；
 - 确保 `dist/lib` 有 `flink-connector-files`（FileSource/FileSink 依赖，缺失则从

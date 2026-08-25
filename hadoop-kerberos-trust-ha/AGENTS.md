@@ -33,7 +33,7 @@
 bash scripts/01-init-kdc.sh        # [首次必做] 构建并启动双 KDC、建立互信、生成并分发 keytab（约 2-3 分钟，幂等）
 bash scripts/02-start-hdfs.sh      # 启动 HA 集群：ZK → JN → 双 NN → DN/YARN（约 3-5 分钟）
 bash scripts/03-verify.sh          # 自动验证：HA 状态 + 故障转移演练 + 双向跨域互信（PASS/FAIL 汇总）
-bash scripts/04-flink-setup.sh     # [可选] Flink 1.18.1：下载发行版 + 启动 flink-client（约 330MB，幂等）
+bash scripts/04-flink-setup.sh     # [可选] Flink 1.18.1：下载发行版 + 启动 flink-client（约 460MB，幂等）
 bash scripts/05-flink-demo.sh      # [可选] 编译/造数/提交/验证 Flink 跨集群演示作业（test 租户）
 bash scripts/00-cleanup.sh         # 停止并删除容器/数据卷/网络；加 --purge 额外删除生成的 keytab 与 krb5.conf
 ```

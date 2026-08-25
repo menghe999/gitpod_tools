@@ -71,7 +71,7 @@ bash scripts/03-verify.sh
 
 # 4) （可选）Flink 1.18.1 跨集群示例：状态/checkpoint 落 ns1234，
 #    作业运行在 ns1234 的 YARN，采集 ns6789 文件打印并写回 ns6789（test 租户）
-bash scripts/04-flink-setup.sh   # 下载 Flink 发行版 + 启动 flink-client（约 330MB）
+bash scripts/04-flink-setup.sh   # 下载 Flink 发行版 + 启动 flink-client（约 460MB）
 bash scripts/05-flink-demo.sh    # 编译 → 造数 → 提交 → 验证
 ```
 
