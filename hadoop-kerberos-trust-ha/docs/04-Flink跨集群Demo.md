@@ -106,6 +106,10 @@ checkpoint 目录出现 `chk-1`、`chk-2` …（含 `_metadata`），证明状�
   直接走信任的 krbtgt 完成认证；
 - **checkpoint 为什么能落 ns1234**：TM 在 nodemanager 容器内（cluster-a 网络），
   `state.checkpoints.dir` 指向 `hdfs://ns1234/...`，由 TM 以 test 身份写入；
+- **TM 为什么有 Hadoop 类**：Flink 1.18 的 AM/TM 类路径来自 hadoop 配置的
+  `yarn.application.classpath`（`Utils.setupYarnClassPath`），**不继承**客户端
+  `HADOOP_CLASSPATH`——cluster-a/yarn-site.xml 已显式配置为容器内绝对路径
+  （`/opt/hadoop-3.2.1/...`，TM 与 NM 同容器同文件系统）；
 - **有界作业**：`FileSource` 读完输入目录即结束，适合演示与断言。
 
 ## 常见问题
@@ -115,6 +119,6 @@ checkpoint 目录出现 `chk-1`、`chk-2` …（含 `_metadata`），证明状�
 | `04` 下载慢/失败 | 检查宿主机外网；可手动下载 tgz 放到 `flink/dist/` 后重跑 |
 | `05` 报 `flink-client 未运行` | 先跑 `bash scripts/04-flink-setup.sh`；或 `docker compose -f ha/docker-compose.yml up -d flink-client` |
 | 提交报 YARN 认证失败 | 确认 RM/NM 已起（`docker ps`）；`test.keytab` 是否存在（`docker exec flink-client ls -l /root/test.keytab`） |
-| TM 报 `NoClassDefFoundError`（hadoop 类） | `flink-client` 提交环境已设 `HADOOP_CLASSPATH`；若 TM 仍缺，把 `flink-shaded-hadoop-3-uber` 放入 `dist/lib` 后重试 |
+| TM 报 `NoClassDefFoundError`（hadoop 类） | 已内置修复：cluster-a/yarn-site.xml 的 `yarn.application.classpath` 指向 `/opt/hadoop-3.2.1`（Flink 1.18 的 AM/TM 类路径只认此配置，不认客户端 `HADOOP_CLASSPATH`）；bind mount 即时生效，无需重启 RM/NM |
 | 作业 FAILED，日志在 `yarn logs -applicationId <id>` | 先看 `grep -A20 Exception` 定位；常见为跨域主体/权限，检查 `docker logs nodemanager` |
 | ns6789 输出/输入权限 | `dfs.permissions.enabled=false`，任意认证主体可写；若仍失败看日志中的认证栈 |

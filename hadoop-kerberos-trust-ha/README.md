@@ -148,7 +148,7 @@ hadoop-kerberos-trust-ha/
 | 容器 OOM / 启动极慢 | 内存不足，调低 `HADOOP_HEAPSIZE`（compose 中默认 NN=768 / JN=512） |
 | `04` 下载 Flink 发行版慢/失败 | 检查宿主机外网；可手动下载 tgz 放 `flink/dist/` 后重跑 |
 | `05` 报 flink-client 未运行 | 先跑 `04`；或 `docker compose -f ha/docker-compose.yml up -d flink-client` |
-| Flink 提交报 YARN 认证失败 / TM 报 hadoop 类缺失 | 确认 RM/NM 已起、`/root/test.keytab` 存在；必要时 `flink-shaded-hadoop-3-uber` 放入 `dist/lib`，见 docs/04 |
+| Flink 提交报 YARN 认证失败 / TM 报 hadoop 类缺失 | 确认 RM/NM 已起、`/root/test.keytab` 存在；TM 类路径已内置修复（cluster-a/yarn-site.xml 的 `yarn.application.classpath`），见 docs/04 |
 | 与基础版部署冲突（网络/端口） | 两套包勿同机部署；或 `export SUBNET_BASE` 迁移网段 |
 
 详见 [docs/03-常见问题-HA.md](docs/03-常见问题-HA.md)。
