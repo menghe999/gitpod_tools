@@ -50,7 +50,7 @@ check_state() {
   local st
   st="$(nn_state "$1" "$2" "$3" "$4")"
   if [ "$st" = "$5" ]; then
-    ok "$6（实际: $st）"
+    ok "${6}（实际: ${st}）"
   else
     bad "$6（期望: $5，实际: ${st:-空}）"
   fi
@@ -185,7 +185,7 @@ if [ "$ACT" = "active" ]; then
 else
   STOP=namenode-a2; STOP_NN=nn2; SURV=namenode-a1; SURV_NN=nn1
 fi
-echo "  当前 active = $STOP_NN，模拟故障：停止 $STOP 容器"
+echo "  当前 active = ${STOP_NN}，模拟故障：停止 ${STOP} 容器"
 docker stop "$STOP"
 wait_state "$SURV" ns1234 "$SURV_NN" test active "故障转移: $SURV_NN 自动接管成为 active" 24
 run "$SURV" "故障转移后: 经 nameservice 代理访问仍可用"    hdfs dfs -ls hdfs://ns1234/user

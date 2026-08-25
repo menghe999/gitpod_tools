@@ -25,7 +25,9 @@ INPUT_DIR="${1:-hdfs://${NS6789_NN}/user/test/input}"
 OUTPUT_DIR="${2:-hdfs://${NS6789_NN}/user/test/output}"
 APP_NAME="${FLINK_APP_NAME:-CrossClusterDemo}"
 
-FLINK_DIST="/opt/flink/dist/flink-1.18.1-bin-scala_2.12"
+# Flink 发行版目录：04 解压后顶层目录为 flink-<version>（如 flink-1.18.1），
+# 这里在容器内动态解析，不依赖目录名假设
+FLINK_DIST="$(docker exec flink-client bash -c 'ls -d /opt/flink/dist/flink-* 2>/dev/null | head -1' || true)"
 JOB_SRC="/opt/flink/job/CrossClusterDemo.java"
 JOB_CLASSES="/opt/flink/job/classes"
 JOB_JAR="/opt/flink/job/cross-cluster-demo.jar"
@@ -57,7 +59,7 @@ docker ps --format '{{.Names}}' | grep -qx nodemanager \
 docker exec flink-client bash -c '(exec 3<>/dev/tcp/resourcemanager.emr.1234.com/8088) 2>/dev/null' \
   || { echo "错误: ResourceManager 8088 不可达（检查 docker logs resourcemanager）" >&2; exit 1; }
 docker exec flink-client test -d "$FLINK_DIST" \
-  || { echo "错误: 容器内缺少 $FLINK_DIST，先执行 bash scripts/04-flink-setup.sh" >&2; exit 1; }
+  || { echo "错误: 容器内缺少 ${FLINK_DIST}，先执行 bash scripts/04-flink-setup.sh" >&2; exit 1; }
 echo "  flink-client / resourcemanager / nodemanager 均就绪"
 
 echo "==> [2/5] 容器内编译作业（javac 对 dist/lib 编译，无需 Maven）..."

@@ -3,7 +3,7 @@
 # 04-flink-setup.sh —— Flink 1.18.1 示例环境准备
 #   1) 启动 flink-client 容器（挂载 flink/、test keytab、cluster-a 配置）
 #   2) 环境冒烟测试：RM 可达 + test 租户（JAAS keytab 免 kinit）跨域访问 ns1234/ns6789
-#   3) 下载 flink-1.18.1-bin-scala_2.12 发行版到 flink/dist（约 330MB，幂等）
+#   3) 下载 flink-1.18.1-bin-scala_2.12 发行版到 flink/dist（约 460MB，幂等）
 #   4) 应用 flink/conf/flink-conf.yaml（test 租户 + checkpoint 落 ns1234）
 # 之后执行 bash scripts/05-flink-demo.sh 提交演示作业。
 # 详细说明见 docs/04-Flink跨集群Demo.md。
@@ -13,7 +13,10 @@ cd "$(dirname "$0")/.."
 
 FLINK_VERSION=1.18.1
 FLINK_BIN="flink-${FLINK_VERSION}-bin-scala_2.12"
+# 注意：tgz 解压后的顶层目录是 flink-<version>（文件名里的 -bin-scala_2.12 不进目录名）
+FLINK_DIR_NAME="flink-${FLINK_VERSION}"
 DIST_DIR="flink/dist"
+DIST_HOME="$DIST_DIR/$FLINK_DIR_NAME"
 TGZ_URL="https://archive.apache.org/dist/flink/flink-${FLINK_VERSION}/${FLINK_BIN}.tgz"
 CONNECTOR_URL="https://repo1.maven.org/maven2/org/apache/flink/flink-connector-files/${FLINK_VERSION}/flink-connector-files-${FLINK_VERSION}.jar"
 
@@ -22,7 +25,7 @@ docker compose version >/dev/null 2>&1 && DC="docker compose" || DC="docker-comp
 echo "==> [1/4] 启动 flink-client 容器 ..."
 $DC -f ha/docker-compose.yml up -d flink-client
 
-echo "==> [2/4] 环境冒烟测试（下载前先验证，避免白下 330MB）..."
+echo "==> [2/4] 环境冒烟测试（下载前先验证，避免白下 460MB）..."
 docker exec flink-client bash -c '(exec 3<>/dev/tcp/resourcemanager.emr.1234.com/8088) 2>/dev/null' \
   || { echo "错误: ResourceManager 8088 不可达（RM/NM 是否已由 02-start-hdfs.sh 启动？）" >&2; exit 1; }
 echo "  [OK] ResourceManager 8088 可达"
@@ -47,22 +50,27 @@ fi
 echo "  [OK] test 租户访问 ns1234 与跨域 ns6789 均成功"
 
 echo "==> [3/4] 检查/下载 Flink 发行版 ..."
-if [ -d "$DIST_DIR/$FLINK_BIN" ]; then
-  echo "  已存在 $DIST_DIR/$FLINK_BIN，跳过下载"
+if [ -d "$DIST_HOME" ]; then
+  echo "  已存在 ${DIST_HOME}，跳过下载"
 else
   mkdir -p "$DIST_DIR"
-  echo "  下载 $TGZ_URL（约 330MB，首次较慢，请耐心等待）..."
+  echo "  下载 ${TGZ_URL}（约 460MB，首次较慢，请耐心等待）..."
   curl -fL --retry 3 --connect-timeout 30 -o "$DIST_DIR/$FLINK_BIN.tgz" "$TGZ_URL"
   echo "  解压 ..."
   tar -xzf "$DIST_DIR/$FLINK_BIN.tgz" -C "$DIST_DIR"
   rm -f "$DIST_DIR/$FLINK_BIN.tgz"
+  # 解析实际解压目录（防御性：不以目录名假设为准）
+  DIST_HOME="$(ls -d "$DIST_DIR"/flink-* 2>/dev/null | head -1 || true)"
 fi
+[ -n "$DIST_HOME" ] && [ -d "$DIST_HOME" ] \
+  || { echo "错误: 未找到解压后的 Flink 发行版目录（$DIST_DIR/flink-*）" >&2; exit 1; }
+echo "  发行版目录: $DIST_HOME"
 
 echo "==> [4/4] 应用 flink-conf.yaml，并确保 FileSource/FileSink 依赖 jar 存在 ..."
-cp flink/conf/flink-conf.yaml "$DIST_DIR/$FLINK_BIN/conf/flink-conf.yaml"
-if ! ls "$DIST_DIR/$FLINK_BIN"/lib/flink-connector-files-*.jar >/dev/null 2>&1; then
+cp flink/conf/flink-conf.yaml "$DIST_HOME/conf/flink-conf.yaml"
+if ! ls "$DIST_HOME"/lib/flink-connector-files-*.jar >/dev/null 2>&1; then
   echo "  dist/lib 缺少 flink-connector-files，从 Maven 中央仓库下载 ..."
-  curl -fL --retry 3 -o "$DIST_DIR/$FLINK_BIN/lib/flink-connector-files-${FLINK_VERSION}.jar" "$CONNECTOR_URL"
+  curl -fL --retry 3 -o "$DIST_HOME/lib/flink-connector-files-${FLINK_VERSION}.jar" "$CONNECTOR_URL"
 fi
 echo "  flink-conf.yaml 已应用，flink-connector-files 已就绪"
 
