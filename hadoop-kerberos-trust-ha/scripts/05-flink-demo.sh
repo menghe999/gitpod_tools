@@ -31,7 +31,7 @@ JOB_CLASSES="/opt/flink/job/classes"
 JOB_JAR="/opt/flink/job/cross-cluster-demo.jar"
 
 # 在 flink-client 容器内以 test@EMR.1234.COM 执行 hadoop/yarn 命令：
-# 用 JAAS login.conf + keytab 登录（不依赖 kinit 二进制，见 FAQ Q13/Q15）
+# 用 JAAS login.conf + keytab 登录（不依赖 kinit 二进制，原理见 docs/04 与 FAQ Q13）
 hdfs_cmd() {
   docker exec flink-client bash -c "
     cat > /tmp/hdfs.login <<'EOF'
@@ -47,11 +47,18 @@ EOF
   "
 }
 
-echo "==> [1/5] 检查 flink-client 容器与 Flink 发行版 ..."
+echo "==> [1/5] 检查 flink-client / RM / NM 与 Flink 发行版 ..."
 docker ps --format '{{.Names}}' | grep -qx flink-client \
   || { echo "错误: flink-client 未运行，先执行 bash scripts/04-flink-setup.sh" >&2; exit 1; }
+docker ps --format '{{.Names}}' | grep -qx resourcemanager \
+  || { echo "错误: resourcemanager 未运行，先执行 bash scripts/02-start-hdfs.sh" >&2; exit 1; }
+docker ps --format '{{.Names}}' | grep -qx nodemanager \
+  || { echo "错误: nodemanager 未运行，先执行 bash scripts/02-start-hdfs.sh" >&2; exit 1; }
+docker exec flink-client bash -c '(exec 3<>/dev/tcp/resourcemanager.emr.1234.com/8088) 2>/dev/null' \
+  || { echo "错误: ResourceManager 8088 不可达（检查 docker logs resourcemanager）" >&2; exit 1; }
 docker exec flink-client test -d "$FLINK_DIST" \
   || { echo "错误: 容器内缺少 $FLINK_DIST，先执行 bash scripts/04-flink-setup.sh" >&2; exit 1; }
+echo "  flink-client / resourcemanager / nodemanager 均就绪"
 
 echo "==> [2/5] 容器内编译作业（javac 对 dist/lib 编译，无需 Maven）..."
 docker exec flink-client bash -c "

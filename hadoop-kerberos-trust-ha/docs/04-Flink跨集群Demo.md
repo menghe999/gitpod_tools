@@ -60,7 +60,7 @@ bash scripts/05-flink-demo.sh
 ```
 
 脚本依次：
-1. 检查 `flink-client` 容器与发行版；
+1. 检查 `flink-client`/`resourcemanager`/`nodemanager` 容器与发行版（含 RM 8088 可达性）；
 2. **容器内编译**：`javac -cp "$FLINK_DIST/lib/*"` 编译 `flink/job/CrossClusterDemo.java`
    并打 jar（**无需 Maven**，镜像自带 JDK8）；
 3. **ns6789 造数**：以 `test@EMR.1234.COM`（JAAS login.conf + keytab，无需 kinit）
