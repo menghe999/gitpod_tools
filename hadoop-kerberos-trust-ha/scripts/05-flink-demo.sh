@@ -94,18 +94,30 @@ APP_ID="$(echo "$submit_out" | grep -oE 'application_[0-9]+_[0-9]+' | head -1 ||
 if [ -z "$APP_ID" ]; then
   APP_ID="$(hdfs_cmd "yarn application -list 2>/dev/null | grep -w '$APP_NAME' | awk '{print \$1}'" | head -1 || true)"
 fi
-echo "  应用 ID: ${APP_ID:-未知}"
-[ -n "$APP_ID" ] || echo "  警告: 未能从提交输出解析到应用 ID，验证将只检查 HDFS 结果"
+if [ -z "$APP_ID" ]; then
+  echo "错误: 提交后未解析到应用 ID，提交疑似失败。完整提交输出：" >&2
+  echo "$submit_out" >&2
+  exit 1
+fi
+echo "  应用 ID: $APP_ID"
 
 echo "==> [5/5] 等待作业结束（有界文件源，读取完即结束）并验证 ..."
-if [ -n "$APP_ID" ]; then
-  for i in $(seq 1 60); do
-    st="$(hdfs_cmd "yarn application -status $APP_ID 2>/dev/null | grep -E '^State|^Final-State' | tr -d ' \t'" || true)"
-    echo "  [${i}] $st"
-    echo "$st" | grep -q "State:FINISHED" && break
-    echo "$st" | grep -q "State:FAILED" && { echo "  作业 FAILED，排查: yarn logs -applicationId $APP_ID" >&2; break; }
-    sleep 5
-  done
+JOB_DONE=0
+for i in $(seq 1 60); do
+  st="$(hdfs_cmd "yarn application -status $APP_ID 2>/dev/null | grep -E '^State|^Final-State' | tr -d ' \t'" || true)"
+  echo "  [${i}] $st"
+  if echo "$st" | grep -q "State:FINISHED"; then JOB_DONE=1; break; fi
+  if echo "$st" | grep -q "State:FAILED"; then
+    echo "  作业 FAILED，自动拉取日志尾部（YARN 日志聚合）..." >&2
+    hdfs_cmd "yarn logs -applicationId $APP_ID 2>/dev/null | grep -iE -A3 'exception|error|caused by' | tail -40" >&2 || true
+    break
+  fi
+  sleep 5
+done
+if [ "$JOB_DONE" -ne 1 ]; then
+  echo "  警告: 作业未在 5 分钟内 FINISHED（最后状态如上）。" >&2
+  echo "  查看: http://localhost:8088（RM Web UI，宿主映射 8088），或:" >&2
+  echo "        docker exec flink-client bash -c 'yarn logs -applicationId $APP_ID | tail -50'" >&2
 fi
 
 echo "  输出目录（ns6789）:"
