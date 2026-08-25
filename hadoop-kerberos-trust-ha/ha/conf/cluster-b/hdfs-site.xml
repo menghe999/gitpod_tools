@@ -112,6 +112,13 @@
   </property>
 
   <!-- 安全配置 -->
+  <!-- 安全 DataNode 启动校验：非 jsvc + HTTP_ONLY 会被 checkSecureConfig 拒绝
+       （Cannot start secure DataNode，见 FAQ Q14）；本环境为测试/演示用途，
+       用官方逃生口跳过特权端口校验 -->
+  <property>
+    <name>dfs.ignore.secure.ports.for.testing</name>
+    <value>true</value>
+  </property>
   <property>
     <name>dfs.data.transfer.protection</name>
     <value>integrity</value>
