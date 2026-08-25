@@ -116,7 +116,7 @@
        （Cannot start secure DataNode，见 FAQ Q14）；本环境为测试/演示用途，
        用官方逃生口跳过特权端口校验 -->
   <property>
-    <name>dfs.ignore.secure.ports.for.testing</name>
+    <name>ignore.secure.ports.for.testing</name>
     <value>true</value>
   </property>
   <property>

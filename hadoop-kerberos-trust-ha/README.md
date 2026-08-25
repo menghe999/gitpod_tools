@@ -133,7 +133,7 @@ hadoop-kerberos-trust-ha/
 | nn2 一直未就绪、日志报 bootstrapStandby 失败 | 确认 nn1 已 active（`docker logs namenode-a1`），且 JN 端口可达 |
 | NN format 静默失败/重启循环，日志报 `Server has invalid Kerberos principal: jn/jn3.emr.1234.com@... expecting: jn/jn3@...` | JN 的 IP 被反解成短主机名（`extra_hosts` 短名条目排在 FQDN 前）→ QJM 客户端推导 `jn/_HOST` 得到短名，见 FAQ Q12（已内置修复：compose 移除短名条目 + `start-nn.sh` 把 JN IP 重写为 FQDN 打头） |
 | NN 走到"NameNode RPC 就绪"后静默 exit 1 重启循环（无报错） | 镜像未预装 krb5-user（`kinit` 缺失）且容器 apt 不可靠 → `start-nn.sh` 已彻底移除 kinit 依赖：状态检查改用 NN Web UI 的 JMX（curl），zkfc/bootstrapStandby 由 JVM 自登录，见 FAQ Q13 |
-| DataNode 报 `Cannot start secure DataNode due to incorrect config`（keytab 登录已成功） | `checkSecureConfig` 要求 jsvc 特权端口或 HTTPS_ONLY+sasl resolver；HA 版用 HTTP_ONLY → 已加官方测试逃生口 `dfs.ignore.secure.ports.for.testing=true`，见 FAQ Q14 |
+| DataNode 报 `Cannot start secure DataNode due to incorrect config`（keytab 登录已成功） | `checkSecureConfig` 要求 jsvc 特权端口或 HTTPS_ONLY+sasl resolver；HA 版用 HTTP_ONLY → 已加官方测试逃生口 `ignore.secure.ports.for.testing=true`（注意无 `dfs.` 前缀），见 FAQ Q14 |
 | 故障转移演练中 standby 未在 120s 内接管 | 检查 `zk1` 是否存活、ZKFC 日志（`docker logs namenode-a2`） |
 | 容器 OOM / 启动极慢 | 内存不足，调低 `HADOOP_HEAPSIZE`（compose 中默认 NN=768 / JN=512） |
 | 与基础版部署冲突（网络/端口） | 两套包勿同机部署；或 `export SUBNET_BASE` 迁移网段 |
