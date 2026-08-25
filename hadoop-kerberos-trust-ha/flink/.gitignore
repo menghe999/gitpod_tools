@@ -1,0 +1,4 @@
+# Flink 发行版与编译产物（大文件/生成物，不提交）
+flink/dist/
+flink/classes/
+flink/*.jar

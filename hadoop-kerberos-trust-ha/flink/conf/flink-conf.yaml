@@ -1,0 +1,25 @@
+# Flink 1.18.1 配置（flink-client 容器挂载自 flink/conf/flink-conf.yaml）
+# 复制到 flink/dist/conf/flink-conf.yaml 或提交时用 -D 覆盖。
+
+# ---------- 运行在 ns1234 的 YARN 上 ----------
+# 提交方式见 scripts/05-flink-demo.sh（flink run-application -t yarn-application）
+jobmanager.memory.process.size: 1024m
+taskmanager.memory.process.size: 1024m
+taskmanager.numberOfTaskSlots: 2
+parallelism.default: 2
+
+# ---------- 状态后端：checkpoint 落 ns1234 HDFS（需求 1） ----------
+state.backend: filesystem
+state.checkpoints.dir: hdfs://ns1234/flink/checkpoints
+state.savepoints.dir: hdfs://ns1234/flink/savepoints
+execution.checkpointing.interval: 10s
+
+# ---------- test 租户（需求 5）：JAAS keytab 自登录，不依赖 kinit 二进制 ----------
+security.kerberos.login.keytab: /root/test.keytab
+security.kerberos.login.principal: test@EMR.1234.COM
+security.kerberos.login.use-ticket-cache: false
+
+# ---------- 跨域：ns6789 用显式地址（FAQ Q7 约定），无需额外配置 ----------
+# 数据源/输出路径由提交参数指定，例如：
+#   hdfs://nn1.emr.6789.com:9000/user/test/input
+#   hdfs://nn1.emr.6789.com:9000/user/test/output

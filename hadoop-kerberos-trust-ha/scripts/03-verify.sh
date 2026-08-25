@@ -75,13 +75,13 @@ wait_state() {
 echo "==> 检查容器状态 =="
 for c in kdc1 kdc2 zk1 jn1 jn2 jn3 \
          namenode-a1 namenode-a2 namenode-b1 namenode-b2 \
-         datanode datanode1 resourcemanager nodemanager; do
+         datanode datanode1 resourcemanager nodemanager flink-client; do
   if ! docker ps --format '{{.Names}}' | grep -qx "$c"; then
     echo "容器 $c 未运行，请先执行: bash scripts/01-init-kdc.sh 和 bash scripts/02-start-hdfs.sh" >&2
     exit 1
   fi
 done
-echo "  14 个关键容器均在运行"
+echo "  15 个关键容器均在运行"
 
 # ---------- 1) 确保 kinit/klist 可用（缺少则安装 krb5-user） ----------
 ensure_kinit() {

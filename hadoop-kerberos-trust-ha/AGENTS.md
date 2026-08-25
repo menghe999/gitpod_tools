@@ -8,7 +8,7 @@
 
 ## 1. 项目概览
 
-**双集群 HDFS 高可用 + Kerberos 跨域互信（最小可用 HA 版）**，共 14 个容器：
+**双集群 HDFS 高可用 + Kerberos 跨域互信（最小可用 HA 版）+ Flink 1.18.1 跨集群示例**，共 15 个容器：
 
 - **双 KDC 跨域互信**：`kdc1`（EMR.1234.COM）、`kdc2`（EMR.6789.COM），双向 krbtgt
   互信（密码 `123456`），支持 `test@EMR.1234.COM` ↔ `test1@EMR.6789.COM` 互访；
@@ -16,7 +16,10 @@
   2/3）+ 单节点 ZooKeeper + ZKFC 自动故障转移；
 - **客户端访问**：本域走 nameservice（`hdfs://ns1234` / `hdfs://ns6789`，
   `ConfiguredFailoverProxyProvider` 自动路由）；跨域用显式地址
-  （`hdfs://nn1.emr.6789.com:9000`）。
+  （`hdfs://nn1.emr.6789.com:9000`）；
+- **Flink 示例**（docs/04）：作业运行在 ns1234 的 YARN、状态/checkpoint 落
+  `hdfs://ns1234/flink/checkpoints`，以 `test@EMR.1234.COM` 租户采集 ns6789 文件、
+  打印日志并写回 ns6789 另一目录（`flink/` 目录 + `scripts/04/05-flink-*.sh`）。
 
 定位是**验证 HA 功能与跨域互信协同的演示环境，非生产配置**。已知简化：ZK 单节点、
 每集群 1 台 DN（`dfs.replication=1`）、隔离方法 `shell(true)`、Web UI 为 HTTP_ONLY。
@@ -30,6 +33,8 @@
 bash scripts/01-init-kdc.sh        # [首次必做] 构建并启动双 KDC、建立互信、生成并分发 keytab（约 2-3 分钟，幂等）
 bash scripts/02-start-hdfs.sh      # 启动 HA 集群：ZK → JN → 双 NN → DN/YARN（约 3-5 分钟）
 bash scripts/03-verify.sh          # 自动验证：HA 状态 + 故障转移演练 + 双向跨域互信（PASS/FAIL 汇总）
+bash scripts/04-flink-setup.sh     # [可选] Flink 1.18.1：下载发行版 + 启动 flink-client（约 330MB，幂等）
+bash scripts/05-flink-demo.sh      # [可选] 编译/造数/提交/验证 Flink 跨集群演示作业（test 租户）
 bash scripts/00-cleanup.sh         # 停止并删除容器/数据卷/网络；加 --purge 额外删除生成的 keytab 与 krb5.conf
 ```
 
@@ -46,10 +51,12 @@ hadoop-kerberos-trust-ha/
 ├── docs/
 │   ├── 01-原理说明-HA.md         # HDFS HA 原理（QJM/ZKFC）+ 与跨域互信的结合
 │   ├── 02-手动验证-HA.md         # 手工命令：查状态/手动切换/nameservice 访问/数据一致性
-│   └── 03-常见问题-HA.md         # Q0~Q11 排错表（改配置前先查这里）
+│   ├── 03-常见问题-HA.md         # Q0~Q14 排错表（改配置前先查这里）
+│   └── 04-Flink跨集群Demo.md     # Flink 1.18.1 示例：需求映射/步骤/验证/FAQ
 ├── kerberos/                     # 双 KDC：Dockerfile / start-kdc.sh / custom-repo（与基础版一致）
+├── flink/                        # Flink 示例：job/ 源码、conf/flink-conf.yaml、dist/(下载产物勿提交)
 ├── ha/
-│   ├── docker-compose.yml        # ZK + 3×JN + 4×NN + 2×DN + RM/NM（14 容器，静态 IP 见 §5）
+│   ├── docker-compose.yml        # ZK + 3×JN + 4×NN + 2×DN + RM/NM + flink-client（15 容器，静态 IP 见 §5）
 │   ├── conf/
 │   │   ├── cluster-a/            # core-site.xml / hdfs-site.xml(HA) / yarn-site.xml
 │   │   ├── cluster-b/            # core-site.xml / hdfs-site.xml(HA)
@@ -61,7 +68,9 @@ hadoop-kerberos-trust-ha/
     ├── 00-cleanup.sh             # 清理（--purge 删除 keytab）
     ├── 01-init-kdc.sh            # KDC 初始化 + 互信 + principal + keytab 导出/分发
     ├── 02-start-hdfs.sh          # 分阶段启动 + 就绪等待
-    └── 03-verify.sh              # 自动验证（24 项 PASS 检查）
+    ├── 03-verify.sh              # 自动验证（24 项 PASS 检查）
+    ├── 04-flink-setup.sh         # Flink 发行版下载 + flink-client 启动（幂等）
+    └── 05-flink-demo.sh          # Flink 作业：编译(javac)/ns6789 造数/提交 YARN/验证
 ```
 
 ## 4. 硬性约定（违反会踩坑）
@@ -94,6 +103,7 @@ hadoop-kerberos-trust-ha/
 | zk1 | zk1 | .10 | ZooKeeper（ZKFC 仲裁，2181） |
 | jn1 / jn2 / jn3 | jnN.emr.1234.com | .11 / .12 / .13 | JournalNode（QJM 8485，跨域供 ns6789 使用） |
 | datanode / resourcemanager / nodemanager | datanode.emr.1234.com 等 | .22 / .23 / .24 | 集群 A DN / RM / NM |
+| flink-client | flink-client.emr.1234.com | .60 | Flink 1.18.1 客户端（提交作业到 ns1234 YARN，docs/04） |
 | datanode1 | datanode.emr.6789.com | .32 | 集群 B DN |
 | namenode-a1 / a2 | nn1 / nn2.emr.1234.com | .41 / .42 | 集群 A NN（ns1234） |
 | namenode-b1 / b2 | nn1 / nn2.emr.6789.com | .51 / .52 | 集群 B NN（ns6789） |

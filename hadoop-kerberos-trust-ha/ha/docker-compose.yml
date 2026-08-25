@@ -399,6 +399,34 @@ services:
     depends_on:
       - resourcemanager
 
+  # ---------- Flink 1.18.1 客户端（提交 Flink 作业到 ns1234 的 YARN） ----------
+  # 用 bde2020/hadoop-namenode 镜像（JDK8 + Hadoop 3.2.1），保持空闲，
+  # 作业通过 docker exec flink-client 提交（见 scripts/04/05-flink-*.sh 与 docs/04）。
+  flink-client:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: flink-client
+    hostname: flink-client.emr.1234.com
+    entrypoint: ["/bin/bash", "-c", "sleep infinity"]
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /dev/pts:/dev/pts
+      - ./kerberos/krb5.conf:/etc/krb5.conf
+      - ./kerberos/test.keytab:/root/test.keytab   # test 租户（跨域访问 ns6789）
+      - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
+      - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      - ./conf/cluster-a/yarn-site.xml:/etc/hadoop/yarn-site.xml
+      - ../flink:/opt/flink   # flink dist + conf + job（见 flink/README.md）
+    networks:
+      ha-net:
+        ipv4_address: "${SUBNET_BASE:-172.28.0}.60"
+    extra_hosts: *EXTRA_HOSTS
+    depends_on:
+      - resourcemanager
+
 volumes:
   zk1-data:
   zk1-datalog:

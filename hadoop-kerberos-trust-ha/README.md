@@ -10,7 +10,7 @@
 
 ---
 
-## 一、架构（14 个容器）
+## 一、架构（15 个容器）
 
 ```
 ┌─ 共享基础层 ────────────────────────────────────────────────┐
@@ -23,7 +23,8 @@
 │ namenode-a1  nn1.emr.1234.com (.41)  active/standby 候选    │
 │ namenode-a2  nn2.emr.1234.com (.42)  standby/active 候选    │
 │ datanode     datanode.emr.1234.com (.22)                   │
-│ resourcemanager / nodemanager（YARN，保留）                  │
+│ resourcemanager / nodemanager（YARN，Flink 作业运行于此）     │
+│ flink-client (.60)        Flink 1.18.1 客户端（提交作业）      │
 └──────────────────────────────────────────────────────────────┘
 ┌─ 集群 B（EMR.6789.COM / nameservice=ns6789）────────────────┐
 │ namenode-b1  nn1.emr.6789.com (.51)                        │
@@ -46,7 +47,7 @@
 | 项目 | 要求 |
 |---|---|
 | Docker | 20.10+（支持 compose v2 或 docker-compose v1） |
-| 内存 | ≥ 8GB（14 个容器；可通过 `HADOOP_HEAPSIZE` 环境变量调低堆内存） |
+| 内存 | ≥ 8GB（15 个容器；可通过 `HADOOP_HEAPSIZE` 环境变量调低堆内存） |
 | 磁盘 | ≥ 10GB |
 | 网络 | 能访问 Docker Hub（zookeeper:3.8、bde2020 镜像） |
 
@@ -67,6 +68,11 @@ bash scripts/02-start-hdfs.sh
 
 # 3) 自动验证（HA 状态 + 故障转移演练 + 双向跨域互信）
 bash scripts/03-verify.sh
+
+# 4) （可选）Flink 1.18.1 跨集群示例：状态/checkpoint 落 ns1234，
+#    作业运行在 ns1234 的 YARN，采集 ns6789 文件打印并写回 ns6789（test 租户）
+bash scripts/04-flink-setup.sh   # 下载 Flink 发行版 + 启动 flink-client（约 330MB）
+bash scripts/05-flink-demo.sh    # 编译 → 造数 → 提交 → 验证
 ```
 
 预期输出（关键部分）：
@@ -105,10 +111,12 @@ hadoop-kerberos-trust-ha/
 ├── docs/
 │   ├── 01-原理说明-HA.md      HDFS HA 原理（QJM/ZKFC）+ 与跨域互信的结合
 │   ├── 02-手动验证-HA.md      手工操作（查状态/手动切换/nameservice 访问）
-│   └── 03-常见问题-HA.md      排错表
+│   ├── 03-常见问题-HA.md      排错表
+│   └── 04-Flink跨集群Demo.md  Flink 1.18.1 示例（状态/运行在 ns1234，数据跨域 ns6789）
 ├── kerberos/                  双 KDC（与基础版一致：Dockerfile/start-kdc.sh/custom-repo）
+├── flink/                     Flink 示例：job/ 源码、conf/flink-conf.yaml、dist/(下载产物)
 ├── ha/
-│   ├── docker-compose.yml     ZK + 3×JN + 4×NN + 2×DN + RM/NM（14 容器）
+│   ├── docker-compose.yml     ZK + 3×JN + 4×NN + 2×DN + RM/NM + flink-client（15 容器）
 │   ├── conf/
 │   │   ├── cluster-a/         core-site / hdfs-site(HA) / yarn-site
 │   │   ├── cluster-b/         core-site / hdfs-site(HA)
@@ -119,7 +127,9 @@ hadoop-kerberos-trust-ha/
     ├── 00-cleanup.sh [--purge]
     ├── 01-init-kdc.sh
     ├── 02-start-hdfs.sh
-    └── 03-verify.sh
+    ├── 03-verify.sh
+    ├── 04-flink-setup.sh      Flink 发行版下载 + flink-client 启动（幂等）
+    └── 05-flink-demo.sh       编译/造数/提交/验证 Flink 跨集群作业
 ```
 
 ---
@@ -136,6 +146,9 @@ hadoop-kerberos-trust-ha/
 | DataNode 报 `Cannot start secure DataNode due to incorrect config`（keytab 登录已成功） | `checkSecureConfig` 要求 jsvc 特权端口或 HTTPS_ONLY+sasl resolver；HA 版用 HTTP_ONLY → 已加官方测试逃生口 `ignore.secure.ports.for.testing=true`（注意无 `dfs.` 前缀），见 FAQ Q14 |
 | 故障转移演练中 standby 未在 120s 内接管 | 检查 `zk1` 是否存活、ZKFC 日志（`docker logs namenode-a2`） |
 | 容器 OOM / 启动极慢 | 内存不足，调低 `HADOOP_HEAPSIZE`（compose 中默认 NN=768 / JN=512） |
+| `04` 下载 Flink 发行版慢/失败 | 检查宿主机外网；可手动下载 tgz 放 `flink/dist/` 后重跑 |
+| `05` 报 flink-client 未运行 | 先跑 `04`；或 `docker compose -f ha/docker-compose.yml up -d flink-client` |
+| Flink 提交报 YARN 认证失败 / TM 报 hadoop 类缺失 | 确认 RM/NM 已起、`/root/test.keytab` 存在；必要时 `flink-shaded-hadoop-3-uber` 放入 `dist/lib`，见 docs/04 |
 | 与基础版部署冲突（网络/端口） | 两套包勿同机部署；或 `export SUBNET_BASE` 迁移网段 |
 
 详见 [docs/03-常见问题-HA.md](docs/03-常见问题-HA.md)。

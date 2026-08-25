@@ -99,14 +99,16 @@ wait_nn namenode-a2 || exit 1
 wait_nn namenode-b1 || exit 1
 wait_nn namenode-b2 || exit 1
 
-# ---------- 3) 启动 DataNode 与 YARN ----------
+# ---------- 3) 启动 DataNode 与 YARN（含 flink-client 客户端容器） ----------
 echo
-echo "==> [3/3] 启动 DataNode 与 YARN (RM/NM) =="
-$DC -f "$COMPOSE" up -d datanode datanode1 resourcemanager nodemanager
+echo "==> [3/3] 启动 DataNode 与 YARN (RM/NM) + flink-client =="
+$DC -f "$COMPOSE" up -d datanode datanode1 resourcemanager nodemanager flink-client
 
 echo
 echo "=============================================="
 echo " 双 HDFS HA 集群已启动！"
 echo " 等 NameNode 退出安全模式并完成故障转移初始化后执行验证："
 echo "   bash scripts/03-verify.sh"
+echo " Flink 跨集群示例（可选）："
+echo "   bash scripts/04-flink-setup.sh && bash scripts/05-flink-demo.sh"
 echo "=============================================="
