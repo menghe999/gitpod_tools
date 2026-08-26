@@ -12,8 +12,10 @@
 #   2) 将控制权交回镜像原始 entrypoint（由环境变量 ORIG_ENTRYPOINT 指定）：
 #      - bde2020/hadoop-*  -> /entrypoint.sh
 #      - zookeeper:3.8     -> /docker-entrypoint.sh
-#      镜像默认 CMD 通过 "$@" 原样透传（如 zkServer.sh start-foreground、
-#      hdfs datanode），因此与不包装时的行为完全一致；
+#      ⚠️ 实测：compose 覆盖 entrypoint 后，镜像的 CMD **不会**自动传入本脚本，
+#      必须在 compose 里用 command: 显式指定（如 /run.sh、zkServer.sh
+#      start-foreground），否则原 entrypoint 的 `exec "$@"` 空操作 → exit 0。
+#      "$@" 把 command 原样透传给原 entrypoint，行为与不包装时完全一致；
 #   3) 防御性 fallback：若 ORIG_ENTRYPOINT 不存在/不可执行，直接执行 CMD。
 # ============================================================
 set -u
@@ -24,6 +26,8 @@ if [ -x /root/install-krb5.sh ]; then
 fi
 
 ORIG="${ORIG_ENTRYPOINT:-}"
+echo "[entry] 收到 CMD 参数: $*（共 $# 个）ORIG_ENTRYPOINT=${ORIG:-空}"
+echo "        若参数为空，说明镜像 CMD 未传入，需在 compose 的 command: 显式指定（见 zk1/datanode 注释）"
 if [ -n "$ORIG" ] && [ -x "$ORIG" ]; then
   exec "$ORIG" "$@"
 fi

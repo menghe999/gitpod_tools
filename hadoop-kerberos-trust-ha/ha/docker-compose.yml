@@ -31,8 +31,11 @@ services:
     container_name: zk1
     hostname: zk1
     # 统一入口包装：先后台补装 krb5-user（kinit），再交给镜像原始
-    # entrypoint /docker-entrypoint.sh（CMD 仍为 zkServer.sh start-foreground）。
+    # entrypoint /docker-entrypoint.sh。注意：覆盖 entrypoint 后必须显式
+    # 指定 command（镜像 CMD 不会自动传入包装脚本，否则原 entrypoint 收不到
+    # 参数，其结尾 `exec "$@"` 会空操作导致容器 exit 0）。
     entrypoint: ["/bin/bash", "/root/container-entry.sh"]
+    command: ["zkServer.sh", "start-foreground"]
     ports:
       - "2181:2181"
     environment:
@@ -306,8 +309,9 @@ services:
     container_name: datanode
     hostname: datanode.emr.1234.com
     # 统一入口包装：先后台补装 krb5-user（kinit），再交给镜像原始
-    # entrypoint /entrypoint.sh（CMD 仍为 hdfs datanode）。
+    # entrypoint /entrypoint.sh。注意：必须显式指定 command（见 zk1 注释）。
     entrypoint: ["/bin/bash", "/root/container-entry.sh"]
+    command: ["/run.sh"]
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://ns1234
       - KRB5_REALM=EMR.1234.COM
@@ -341,6 +345,7 @@ services:
     container_name: datanode1
     hostname: datanode.emr.6789.com
     entrypoint: ["/bin/bash", "/root/container-entry.sh"]
+    command: ["/run.sh"]
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://ns6789
       - KRB5_REALM=EMR.6789.COM
@@ -376,6 +381,7 @@ services:
     hostname: resourcemanager.emr.1234.com
     # 统一入口包装：先后台补装 krb5-user（kinit），再交给镜像原始 entrypoint
     entrypoint: ["/bin/bash", "/root/container-entry.sh"]
+    command: ["/run.sh"]
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://ns1234
       - KRB5_REALM=EMR.1234.COM
@@ -414,6 +420,7 @@ services:
     container_name: nodemanager
     hostname: nodemanager.emr.1234.com
     entrypoint: ["/bin/bash", "/root/container-entry.sh"]
+    command: ["/run.sh"]
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://ns1234
       - KRB5_REALM=EMR.1234.COM
