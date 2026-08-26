@@ -30,16 +30,23 @@ services:
     image: zookeeper:3.8
     container_name: zk1
     hostname: zk1
+    # 统一入口包装：先后台补装 krb5-user（kinit），再交给镜像原始
+    # entrypoint /docker-entrypoint.sh（CMD 仍为 zkServer.sh start-foreground）。
+    entrypoint: ["/bin/bash", "/root/container-entry.sh"]
     ports:
       - "2181:2181"
     environment:
       - TZ=${TZ:-Asia/Shanghai}
+      - ORIG_ENTRYPOINT=/docker-entrypoint.sh
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
       # 自定义 zoo.cfg：新版官方镜像单节点时不生成 clientPort（2181 不监听），
       # 必须显式提供（详见 docs/03-常见问题-HA.md Q10）
       - ./conf/zk/zoo.cfg:/conf/zoo.cfg:ro
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
+      - ./conf/scripts/container-entry.sh:/root/container-entry.sh:ro
       - zk1-data:/data
       - zk1-datalog:/datalog
     networks:
@@ -64,6 +71,8 @@ services:
       - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
       - ./conf/journalnode/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
       - ./conf/scripts/start-jn.sh:/root/start-jn.sh:ro
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
       - jn1-data:/hadoop/dfs/journal
     networks:
       ha-net:
@@ -104,6 +113,8 @@ services:
       - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
       - ./conf/journalnode/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
       - ./conf/scripts/start-jn.sh:/root/start-jn.sh:ro
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
       - jn2-data:/hadoop/dfs/journal
     networks:
       ha-net:
@@ -127,6 +138,8 @@ services:
       - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
       - ./conf/journalnode/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
       - ./conf/scripts/start-jn.sh:/root/start-jn.sh:ro
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
       - jn3-data:/hadoop/dfs/journal
     networks:
       ha-net:
@@ -159,6 +172,8 @@ services:
       - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
       - ./conf/cluster-a/yarn-site.xml:/etc/hadoop/yarn-site.xml
       - ./conf/scripts/start-nn.sh:/root/start-nn.sh:ro
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
       - namenode-a1-data:/hadoop/dfs/name
     networks:
       ha-net:
@@ -195,6 +210,8 @@ services:
       - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
       - ./conf/cluster-a/yarn-site.xml:/etc/hadoop/yarn-site.xml
       - ./conf/scripts/start-nn.sh:/root/start-nn.sh:ro
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
       - namenode-a2-data:/hadoop/dfs/name
     networks:
       ha-net:
@@ -232,6 +249,8 @@ services:
       - ./conf/cluster-b/core-site.xml:/etc/hadoop/core-site.xml
       - ./conf/cluster-b/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
       - ./conf/scripts/start-nn.sh:/root/start-nn.sh:ro
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
       - namenode-b1-data:/hadoop/dfs/name
     networks:
       ha-net:
@@ -267,6 +286,8 @@ services:
       - ./conf/cluster-b/core-site.xml:/etc/hadoop/core-site.xml
       - ./conf/cluster-b/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
       - ./conf/scripts/start-nn.sh:/root/start-nn.sh:ro
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
       - namenode-b2-data:/hadoop/dfs/name
     networks:
       ha-net:
@@ -284,11 +305,15 @@ services:
     image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
     container_name: datanode
     hostname: datanode.emr.1234.com
+    # 统一入口包装：先后台补装 krb5-user（kinit），再交给镜像原始
+    # entrypoint /entrypoint.sh（CMD 仍为 hdfs datanode）。
+    entrypoint: ["/bin/bash", "/root/container-entry.sh"]
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://ns1234
       - KRB5_REALM=EMR.1234.COM
       - KRB5_KDC=kdc1
       - TZ=${TZ:-Asia/Shanghai}
+      - ORIG_ENTRYPOINT=/entrypoint.sh
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
@@ -297,6 +322,9 @@ services:
       - ./kerberos/dn.keytab:/etc/hadoop/dn.keytab
       - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
       - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
+      - ./conf/scripts/container-entry.sh:/root/container-entry.sh:ro
       - datanode-data:/hadoop/dfs/data
     tmpfs:
       - /tmp
@@ -312,11 +340,13 @@ services:
     image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
     container_name: datanode1
     hostname: datanode.emr.6789.com
+    entrypoint: ["/bin/bash", "/root/container-entry.sh"]
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://ns6789
       - KRB5_REALM=EMR.6789.COM
       - KRB5_KDC=kdc2
       - TZ=${TZ:-Asia/Shanghai}
+      - ORIG_ENTRYPOINT=/entrypoint.sh
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
@@ -325,6 +355,9 @@ services:
       - ./kerberos1/dn.keytab:/etc/hadoop/dn.keytab
       - ./conf/cluster-b/core-site.xml:/etc/hadoop/core-site.xml
       - ./conf/cluster-b/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
+      - ./conf/scripts/container-entry.sh:/root/container-entry.sh:ro
       - datanode1-data:/hadoop/dfs/data
     tmpfs:
       - /tmp
@@ -341,11 +374,14 @@ services:
     image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
     container_name: resourcemanager
     hostname: resourcemanager.emr.1234.com
+    # 统一入口包装：先后台补装 krb5-user（kinit），再交给镜像原始 entrypoint
+    entrypoint: ["/bin/bash", "/root/container-entry.sh"]
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://ns1234
       - KRB5_REALM=EMR.1234.COM
       - KRB5_KDC=kdc1
       - TZ=${TZ:-Asia/Shanghai}
+      - ORIG_ENTRYPOINT=/entrypoint.sh
     ports:
       - "8088:8088"  # ResourceManager Web UI
     volumes:
@@ -361,6 +397,9 @@ services:
       - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
       - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
       - ./conf/cluster-a/yarn-site.xml:/etc/hadoop/yarn-site.xml
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
+      - ./conf/scripts/container-entry.sh:/root/container-entry.sh:ro
     networks:
       ha-net:
         ipv4_address: "${SUBNET_BASE:-172.28.0}.23"
@@ -374,11 +413,13 @@ services:
     image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
     container_name: nodemanager
     hostname: nodemanager.emr.1234.com
+    entrypoint: ["/bin/bash", "/root/container-entry.sh"]
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://ns1234
       - KRB5_REALM=EMR.1234.COM
       - KRB5_KDC=kdc1
       - TZ=${TZ:-Asia/Shanghai}
+      - ORIG_ENTRYPOINT=/entrypoint.sh
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
@@ -392,6 +433,9 @@ services:
       - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
       - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
       - ./conf/cluster-a/yarn-site.xml:/etc/hadoop/yarn-site.xml
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
+      - ./conf/scripts/container-entry.sh:/root/container-entry.sh:ro
     networks:
       ha-net:
         ipv4_address: "${SUBNET_BASE:-172.28.0}.24"
@@ -406,7 +450,8 @@ services:
     image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
     container_name: flink-client
     hostname: flink-client.emr.1234.com
-    entrypoint: ["/bin/bash", "-c", "sleep infinity"]
+    # 保持空闲；启动时先后台补装 krb5-user（kinit），便于手工 kinit 验证
+    entrypoint: ["/bin/bash", "-c", "/root/install-krb5.sh >/tmp/install-krb5.log 2>&1 & echo '[flink-client] krb5-user 后台安装中（容器内日志: /tmp/install-krb5.log）'; exec sleep infinity"]
     restart: unless-stopped
     environment:
       - TZ=${TZ:-Asia/Shanghai}
@@ -419,6 +464,8 @@ services:
       - ./conf/cluster-a/core-site.xml:/etc/hadoop/core-site.xml
       - ./conf/cluster-a/hdfs-site.xml:/etc/hadoop/hdfs-site.xml
       - ./conf/cluster-a/yarn-site.xml:/etc/hadoop/yarn-site.xml
+      # 启动时补装 krb5-user（kinit），见 install-krb5.sh / FAQ Q13
+      - ./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro
       - ../flink:/opt/flink   # flink dist + conf + job（见 flink/README.md）
     networks:
       ha-net:

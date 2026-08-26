@@ -62,6 +62,8 @@ hadoop-kerberos-trust-ha/
 │   │   ├── cluster-b/            # core-site.xml / hdfs-site.xml(HA)
 │   │   ├── journalnode/          # hdfs-site.xml（JN 专用，含 SPNEGO 配置，见 FAQ Q0）
 │   │   ├── scripts/              # start-nn.sh / start-jn.sh（容器 entrypoint，见 FAQ Q11）
+│   │   │                          install-krb5.sh（启动时补装 krb5-user/kinit，幂等）
+│   │   │                          container-entry.sh（默认 entrypoint 容器的入口包装）
 │   │   └── zk/                   # zoo.cfg（显式 clientPort=2181，见 FAQ Q10）
 │   └── kerberos/  kerberos1/     # 【生成产物】01 分发的 krb5.conf 与 keytab，勿手改、勿提交
 └── scripts/
@@ -117,7 +119,12 @@ compose 中每服务都有完整 `extra_hosts`（YAML 锚点 `*EXTRA_HOSTS`）�
   principal 列表（§3.2/§4.2）、keytab 导出（§3.4/§4.4）、非空校验列表（§3.5/§4.5），
   以及 `02-start-hdfs.sh` 预检清单（§预检）与 `ha/kerberos*/README.md` 的文件清单。
 - **新增/改名容器** → 改 `ha/docker-compose.yml`（服务 + `extra_hosts` 锚点）、
-  `scripts/03-verify.sh` 的容器存活检查列表（§0）、`README.md` 架构图与目录结构。
+  `scripts/03-verify.sh` 的容器存活检查列表（§0）与 kinit 可用性检查（§0.5）、
+  `README.md` 架构图与目录结构。**新容器必须接入 krb5 补装**：compose 挂载
+  `./conf/scripts/install-krb5.sh:/root/install-krb5.sh:ro`；自定义 entrypoint 的
+  脚本开头调用它（后台、best-effort），默认 entrypoint 的容器用
+  `container-entry.sh` 包装（`entrypoint: ["/bin/bash","/root/container-entry.sh"]`
+  + `ORIG_ENTRYPOINT=<镜像原始入口>`）。
 - **改 HA 配置**（hdfs-site / core-site / start-*.sh）→ 先读 `docs/03-常见问题-HA.md`
   的 Q0/Q10/Q11（SPNEGO 缺配置、ZK clientPort、`_HOST` 反向解析竞态），并在
   `docs/01-原理说明-HA.md` 中同步原理描述。
@@ -136,7 +143,7 @@ compose 中每服务都有完整 `extra_hosts`（YAML 锚点 `*EXTRA_HOSTS`）�
 | NN 卡"等待 ZooKeeper (zk1:2181)" | zookeeper:3.8 镜像单节点不监听 2181 → `conf/zk/zoo.cfg` 显式 clientPort；`--force-recreate zk1`（Q10） |
 | JN/NN 重启循环 "Unable to obtain password from user" | `_HOST` 被反解成短主机名 → `start-jn.sh/start-nn.sh` 已写 /etc/hosts 固化 FQDN；**勿用 sed -i 改 /etc/hosts**（bind mount 会报 Device or resource busy），须 `cat >` 原地重写（Q11） |
 | NN format 静默失败/重启循环 "Server has invalid Kerberos principal ... expecting: jn/jn3@..." | NN→JN 客户端方向 `_HOST` 反解竞态：`extra_hosts` 短名（jn3）排在 FQDN 前 → 已移除 jn1-3 短名条目；`start-nn.sh` 把 JN IP 重写为 FQDN 打头并逐台断言（Q12） |
-| NN 在"RPC 就绪"/"等待对端 active"后静默 exit 1 重启（无报错） | 镜像缺 krb5-user（kinit 缺失）且容器 apt 不可靠 → `start-nn.sh` 已移除 kinit 依赖：状态检查用 JMX/curl，zkfc/bootstrapStandby 由 JVM 自登录；`fail()`/EXIT trap 走 stdout（Q13） |
+| NN 在"RPC 就绪"/"等待对端 active"后静默 exit 1 重启（无报错） | 镜像缺 krb5-user（kinit 缺失）→ 双层设计：`start-nn.sh` 对 kinit 零依赖（状态检查用 JMX/curl，zkfc/bootstrapStandby 由 JVM 自登录；`fail()`/EXIT trap 走 stdout）；同时所有容器启动时后台补装 krb5-user（`install-krb5.sh`，幂等、不阻塞启动、失败仅告警），详见 FAQ Q13 |
 | DataNode 报 "Cannot start secure DataNode due to incorrect config"（登录已成功） | checkSecureConfig 要求 jsvc 特权端口或 HTTPS_ONLY+sasl resolver；HA 版全链路 HTTP_ONLY → 已加 `ignore.secure.ports.for.testing=true`（官方测试逃生口，注意无 `dfs.` 前缀，Q14） |
 | Flink TM 报 NoClassDefFoundError（hadoop 类） | Flink 1.18 的 AM/TM 类路径只来自 hadoop 配置 `yarn.application.classpath`（`Utils.setupYarnClassPath`），不继承客户端 HADOOP_CLASSPATH → cluster-a/yarn-site.xml 已配容器内绝对路径 /opt/hadoop-3.2.1（docs/04） |
 | 脚本 `set -u` 报 `xxx�: unbound variable`（变量已赋值） | bash 多字节解析怪癖：`$VAR` 后紧跟中文/全角字符时首字节被吞进变量名 → 一律写 `${VAR}`；审计命令见 FAQ Q15 |

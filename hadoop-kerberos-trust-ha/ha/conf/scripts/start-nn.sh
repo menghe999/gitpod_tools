@@ -30,13 +30,23 @@ log()  { echo "[NN:$NNID] $*"; }
 fail() { echo "[NN:$NNID] 错误: $*"; exit 1; }
 trap 'rc=$?; [ "$rc" -ne 0 ] && echo "[NN:${NNID:-?}] 脚本异常退出 rc=$rc"' EXIT
 
-# ---------- 说明：脚本不依赖 kinit 二进制（镜像无 krb5-user） ----------
-# bde2020 镜像未预装 krb5-user（kinit 缺失），且容器内 apt 安装不可靠
-# （archive.debian.org 不可达时 apt-get 返回 100，见 FAQ Q13）。本脚本已彻底
-# 移除 kinit 依赖：
+# ---------- 确保 kinit 可用（启动时后台补装 krb5-user，不阻塞 NN 启动） ----------
+# bde2020 镜像未预装 krb5-user（FAQ Q13）。install-krb5.sh 幂等（已装秒退），
+# best-effort：失败仅告警不影响 NN 启动（离线时属正常），日志在容器内
+# /tmp/install-krb5.log，可手动补装：docker exec <容器> bash /root/install-krb5.sh。
+if [ -x /root/install-krb5.sh ]; then
+  /root/install-krb5.sh >/tmp/install-krb5.log 2>&1 &
+  log "krb5-user 后台安装中（容器内日志: /tmp/install-krb5.log）"
+fi
+
+# ---------- 说明：脚本不依赖 kinit 二进制（防御性设计，与补装互不冲突） ----------
+# bde2020 镜像默认未预装 krb5-user（kinit 缺失），容器内 apt 安装也可能因
+# archive.debian.org 不可达而失败（见 FAQ Q13）。因此本脚本对 kinit **零依赖**，
+# 即使补装失败 NN 也照常工作（补装只是方便手工验证）：
 #   - format / zkfc / bootstrapStandby / NN 守护进程均由 JVM 用 keytab 自登录
 #     （SecurityUtil.login，内部完成，不调用 kinit）；
-#   - 主备状态查询改用 NN Web UI 的 JMX（HTTP_ONLY 匿名访问），见 nn_state()。
+#   - 主备状态查询改用 NN Web UI 的 JMX（HTTP_ONLY 匿名访问），见 nn_state()；
+#   - 启动时 install-krb5.sh 后台补装 krb5-user 属于"锦上添花"，两套机制并存。
 
 # ---------- 主机名修正：确保 canonical hostname = FQDN ----------
 # 服务端方向（与 start-jn.sh 同一问题）：JVM 反向解析本容器 IP 可能得到短主机名
@@ -110,10 +120,10 @@ wait_tcp() {
 }
 
 # ---------- 工具：NN 状态查询（JMX over HTTP，免 kinit/TGT） ----------
-# 镜像无 krb5-user 且 apt 不可靠（FAQ Q13），不用 hdfs haadmin（需要 TGT），
-# 改查 NN Web UI 的 JMX：Web 为 HTTP_ONLY 匿名访问。
-# 注意：主备状态在 NameNodeStatus bean 的 State 字段（active/standby），
-# FSNamesystemState 只有 FSState=Operational，没有 active/standby（曾导致误判超时）。
+# 不依赖 hdfs haadmin（需要 TGT），改查 NN Web UI 的 JMX：Web 为 HTTP_ONLY
+# 匿名访问。注意：主备状态在 NameNodeStatus bean 的 State 字段
+# （active/standby），FSNamesystemState 只有 FSState=Operational，没有
+# active/standby（曾导致误判超时）。
 nn_state() {
   curl -s --max-time 5 \
     "http://${1}.${DOMAIN}:50070/jmx?qry=Hadoop:service=NameNode,name=NameNodeStatus" 2>/dev/null \

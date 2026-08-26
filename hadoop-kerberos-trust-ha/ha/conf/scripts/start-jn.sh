@@ -11,6 +11,15 @@ set -e
 log()  { echo "[JN] $*"; }
 fail() { echo "[JN] 错误: $*" >&2; exit 1; }
 
+# ---------- 确保 kinit 可用（启动时后台补装 krb5-user，不阻塞 JN 启动） ----------
+# bde2020 镜像未预装 krb5-user（FAQ Q13）。install-krb5.sh 幂等（已装秒退），
+# best-effort：失败仅告警不影响 JN 启动（离线时属正常），日志在容器内
+# /tmp/install-krb5.log，可手动补装：docker exec jnN bash /root/install-krb5.sh。
+if [ -x /root/install-krb5.sh ]; then
+  /root/install-krb5.sh >/tmp/install-krb5.log 2>&1 &
+  log "krb5-user 后台安装中（容器内日志: /tmp/install-krb5.log）"
+fi
+
 # ---------- 主机名修正：确保 canonical hostname = FQDN ----------
 # 背景：docker 内 JVM 反向解析本容器 IP 时可能得到短主机名（jn2 而非
 # jn2.emr.1234.com），导致守护进程按 jn/jn2@EMR.1234.COM 登录（keytab 里只有

@@ -83,31 +83,45 @@ for c in kdc1 kdc2 zk1 jn1 jn2 jn3 \
 done
 echo "  15 个关键容器均在运行"
 
-# ---------- 1) 确保 kinit/klist 可用（缺少则安装 krb5-user） ----------
+# ---------- 0.5) kinit 可用性检查（仅提示，不阻塞；启动时已后台补装） ----------
+MISSING_KINIT=""
+for c in zk1 jn1 jn2 jn3 \
+         namenode-a1 namenode-a2 namenode-b1 namenode-b2 \
+         datanode datanode1 resourcemanager nodemanager flink-client; do
+  if ! docker exec "$c" bash -c 'command -v kinit >/dev/null 2>&1' 2>/dev/null; then
+    MISSING_KINIT="$MISSING_KINIT $c"
+  fi
+done
+if [ -n "$MISSING_KINIT" ]; then
+  echo "  [INFO] 以下容器暂无 kinit（启动时补装失败或仍在进行）：$MISSING_KINIT"
+  echo "         可手动补装: docker exec <容器> bash /root/install-krb5.sh（见 FAQ Q13）"
+fi
+
+# ---------- 1) 确保 kinit/klist 可用（容器启动时已后台补装；此处前台兜底） ----------
+# 容器启动时 install-krb5.sh 已后台补装 krb5-user（见 ha/conf/scripts/install-krb5.sh）。
+# 若因网络等原因未装上，这里用同一脚本前台补装（archive.debian.org，可能较慢）。
 ensure_kinit() {
-  local c="$1" host_conf="$2"
+  local c="$1" i
   if docker exec "$c" bash -c 'command -v kinit >/dev/null 2>&1'; then
     return 0
   fi
-  echo "  [$c] 缺少 krb5-user，从 stretch 归档源安装（可能较慢）..."
-  # 备份宿主机上挂载的 krb5.conf，防止 apt 安装时改写
-  cp "$host_conf" "${host_conf}.bak"
-  docker exec "$c" bash -c '
-    echo "deb http://archive.debian.org/debian stretch main contrib non-free" > /etc/apt/sources.list
-    echo "deb http://archive.debian.org/debian-security stretch/updates main contrib non-free" >> /etc/apt/sources.list
-    echo "Acquire::Check-Valid-Until false;" > /etc/apt/apt.conf.d/99no-check-valid-until
-    DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1
-    DEBIAN_FRONTEND=noninteractive apt-get install -y krb5-user >/dev/null 2>&1
-  '
-  cp "${host_conf}.bak" "$host_conf" && rm -f "${host_conf}.bak"
-  if ! docker exec "$c" bash -c 'command -v kinit >/dev/null 2>&1'; then
-    echo "  [$c] krb5-user 安装失败，请检查网络（archive.debian.org 可达性）" >&2
-    exit 1
-  fi
-  echo "  [$c] krb5-user 就绪"
+  echo "  [$c] 缺少 krb5-user，前台补装（install-krb5.sh，网络可用时）..."
+  # 容器内无该脚本（如变更前已启动的旧容器）则 docker cp 进去
+  docker exec "$c" bash -c 'test -x /root/install-krb5.sh' 2>/dev/null \
+    || docker cp ha/conf/scripts/install-krb5.sh "$c":/root/install-krb5.sh
+  docker exec "$c" bash /root/install-krb5.sh >/dev/null 2>&1 || true
+  for i in $(seq 1 72); do   # 最长 6 分钟（含等待启动时后台安装完成）
+    if docker exec "$c" bash -c 'command -v kinit >/dev/null 2>&1'; then
+      echo "  [$c] krb5-user 就绪"
+      return 0
+    fi
+    sleep 5
+  done
+  echo "  [$c] krb5-user 安装失败，请检查网络（archive.debian.org 可达性）" >&2
+  exit 1
 }
-ensure_kinit namenode-a1 ha/kerberos/krb5.conf
-ensure_kinit namenode-b1 ha/kerberos1/krb5.conf
+ensure_kinit namenode-a1
+ensure_kinit namenode-b1
 
 # ---------- 2) 等待 4 台 NameNode 就绪 ----------
 wait_nn() {
